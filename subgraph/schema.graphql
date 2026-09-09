@@ -1,0 +1,91 @@
+# AgentGrid subgraph — The Graph indexes for the AgentGrid coordination protocol.
+#
+# Design: one entity per onchain record the frontend actually renders.
+# - Job: every JobRouter lifecycle event folds into one row (POSTED → ASSIGNED →
+#   SUBMITTED → SETTLED/CANCELLED/EXPIRED/DISPUTED). Frontend reads jobs + filters
+#   from here instead of calling jobs(jobId) in a loop.
+# - Agent: bonding + outcome events fold into one row per agentId. Tier/score are
+#   recomputed client-side from outcomes (same pure formula as the contract).
+# - Pool: singleton row ("1") — revenue, deposits, losses move pricePerShare.
+# - CreditPosition: per-agent debt ledger (always zero while gates are OFF, but the
+#   entity exists so activation needs no schema migration).
+# - JobEvent: append-only per-job audit trail for the Router Events tab.
+
+type Job @entity(immutable: false) {
+  id: ID! # jobId as decimal string
+  originator: Bytes!
+  designatedAssignee: Bytes!
+  specHash: Bytes!
+  payment: BigInt!
+  createdAt: BigInt!
+  execDeadline: BigInt!
+  approvalWindow: BigInt!
+  acceptedAt: BigInt!
+  approvalDeadline: BigInt!
+  executorBps: Int!
+  lpBps: Int!
+  treasuryBps: Int!
+  assignedAgent: Bytes!
+  assignedWallet: Bytes! # resolved wallet for assignedAgent (front-end reads this directly)
+  resultHash: Bytes!
+  drawnForJob: BigInt!
+  opsBudget: BigInt!
+  state: String! # POSTED | ASSIGNED | SUBMITTED | SETTLED | CANCELLED | EXPIRED | DISPUTED
+  executorPaid: BigInt!
+  lpPaid: BigInt!
+  treasuryPaid: BigInt!
+  debtRepaid: BigInt!
+  outcome: String # SUCCESS | FAILURE | NEUTRAL | FRAUD, once terminal
+  updatedAt: BigInt!
+}
+
+type Agent @entity(immutable: false) {
+  id: ID! # agentId hex (bytes32)
+  wallet: Bytes!
+  bond: BigInt!
+  registeredAt: BigInt!
+  unlockAt: BigInt!
+  adapter: Bytes!
+  externalId: BigInt!
+  debtLocked: Boolean!
+  success: Int!
+  failure: Int!
+  neutral: Int!
+  fraud: Int!
+  volume: BigInt!
+  jobsAssigned: Int!
+  updatedAt: BigInt!
+}
+
+type Pool @entity(immutable: false) {
+  id: ID! # constant "1"
+  totalPrincipal: BigInt!
+  lendEnabled: Boolean!
+  paused: Boolean!
+  revenueTotal: BigInt!
+  lossTotal: BigInt!
+  updatedAt: BigInt!
+}
+
+type CreditPosition @entity(immutable: false) {
+  id: ID! # agentId hex
+  agent: Agent!
+  principal: BigInt!
+  updatedAt: BigInt!
+}
+
+type JobEvent @entity(immutable: true) {
+  id: ID! # txHash-logIndex
+  jobId: BigInt!
+  kind: String! # Posted | Accepted | ResultSubmitted | Settled | Cancelled | Expired | DisputeOpened | DisputeResolved | TimeoutSettled | MutualCancelProposed | MutualCancelled | WorkingCapitalDrawn
+  at: BigInt!
+  txHash: Bytes!
+}
+
+# Wallet → agentId link. Registry write-paths (top-ups, exits, slashes, outcomes)
+# are wallet-keyed while Agent rows are agentId-keyed; BondedIn writes the link
+# once and every wallet-keyed handler resolves through it.
+type WalletLink @entity(immutable: true) {
+  id: ID! # wallet hex
+  agent: Agent!
+}

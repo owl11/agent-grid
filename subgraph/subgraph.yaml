@@ -1,0 +1,142 @@
+# AgentGrid subgraph — indexes the AgentGrid coordination protocol on Arc testnet.
+#
+# DEPLOY-TIME VALUES (fill after `forge script` deploy, then `graph codegen && graph deploy`):
+#   - JobRouter / AgentRegistry / CapitalPool / CreditLine addresses below
+#   - startBlock for each source (the deploy block)
+specVersion: 1.2.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: JobRouter
+    network: arc-testnet
+    source:
+      address: "0xF11b9cCEcd0976A5A1F050F23fD028c6b59bD1e8"
+      abi: JobRouter
+      startBlock: 61077975
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Job
+        - JobEvent
+      abis:
+        - name: JobRouter
+          file: ./abis/JobRouter.json
+      eventHandlers:
+        - event: JobPosted(indexed uint256,indexed address,uint128,bytes32,uint64,uint96)
+          handler: handleJobPosted
+        - event: JobAccepted(indexed uint256,indexed bytes32,uint64)
+          handler: handleJobAccepted
+        - event: ResultSubmitted(indexed uint256,bytes32)
+          handler: handleResultSubmitted
+        - event: JobSettled(indexed uint256,indexed bytes32,uint256,uint256[3])
+          handler: handleJobSettled
+        - event: JobCancelled(indexed uint256,uint256,uint256)
+          handler: handleJobCancelled
+        - event: JobExpired(indexed uint256,uint256,uint256)
+          handler: handleJobExpired
+        - event: TimeoutSettled(indexed uint256)
+          handler: handleTimeoutSettled
+        - event: DisputeOpened(indexed uint256,indexed bytes32)
+          handler: handleDisputeOpened
+        - event: DisputeResolved(indexed uint256,uint8)
+          handler: handleDisputeResolved
+        - event: DisputeExpired(indexed uint256,uint256)
+          handler: handleDisputeExpired
+        - event: MutualCancelProposed(indexed uint256,address,uint16,uint16)
+          handler: handleMutualCancelProposed
+        - event: MutualCancelled(indexed uint256)
+          handler: handleMutualCancelled
+        - event: WorkingCapitalDrawn(indexed uint256,uint256)
+          handler: handleWorkingCapitalDrawn
+      file: ./src/job-router.ts
+  - kind: ethereum
+    name: AgentRegistry
+    network: arc-testnet
+    source:
+      address: "0xA3b58Deb21BF852B62db9367868b028fe316395f"
+      abi: AgentRegistry
+      startBlock: 61077975
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Agent
+      abis:
+        - name: AgentRegistry
+          file: ./abis/AgentRegistry.json
+      eventHandlers:
+        - event: BondedIn(indexed address,indexed bytes32,address,uint256)
+          handler: handleBondedIn
+        - event: BondAdded(indexed address,uint256)
+          handler: handleBondAdded
+        - event: ExitRequested(indexed address,uint64)
+          handler: handleExitRequested
+        - event: Exited(indexed address,uint256)
+          handler: handleExited
+        - event: Slashed(indexed address,uint256,indexed bytes32)
+          handler: handleSlashed
+        - event: OutcomeRecorded(indexed uint256,indexed address,uint8,uint256,uint256)
+          handler: handleOutcomeRecorded
+      file: ./src/registry.ts
+  - kind: ethereum
+    name: CapitalPool
+    network: arc-testnet
+    source:
+      address: "0x3D70A2dC368c16259fA39e71c630fFDe4dCE58A3"
+      abi: CapitalPool
+      startBlock: 61077975
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Pool
+      abis:
+        - name: CapitalPool
+          file: ./abis/CapitalPool.json
+      eventHandlers:
+        - event: Deposit(indexed address,indexed address,uint256,uint256)
+          handler: handleDeposit
+        - event: Withdraw(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleWithdraw
+        - event: RevenueReceived(uint256,uint256)
+          handler: handleRevenueReceived
+        - event: LossReported(indexed bytes32,indexed uint256,uint256,uint256)
+          handler: handleLossReported
+        - event: LendEnabled(bool)
+          handler: handleLendEnabled
+        - event: EmergencyPaused()
+          handler: handleEmergencyPaused
+        - event: EmergencyResumed()
+          handler: handleEmergencyResumed
+      file: ./src/pool.ts
+  - kind: ethereum
+    name: CreditLine
+    network: arc-testnet
+    source:
+      address: "0xf1f456eBF0e8e8eCD4f940437984f151ebfAEd78"
+      abi: CreditLine
+      startBlock: 61077975
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - CreditPosition
+      abis:
+        - name: CreditLine
+          file: ./abis/CreditLine.json
+      eventHandlers:
+        - event: Drawn(indexed bytes32,uint256)
+          handler: handleDrawn
+        - event: Repaid(indexed bytes32,uint256,uint256)
+          handler: handleRepaid
+        - event: Slashed(indexed bytes32,uint256,uint256)
+          handler: handleSlashCoverage
+      file: ./src/credit.ts

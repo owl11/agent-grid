@@ -1,0 +1,21 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+remappings = [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "ds-test/=lib/forge-std/lib/ds-test/src/",
+    "forge-std/=lib/forge-std/src/"
+]
+
+[rpc_endpoints.arc_testnet]
+url = "https://rpc.testnet.arc.io"
+chain_id = 5042002
+
+[profile.default.lint]
+ignore = ["test/*.sol", "test/mocks/*.sol"]
+exclude_lints = [
+    "mixed-case-variable",
+    "mixed-case-function",
+    "screaming-snake-case-immutable",
+]
