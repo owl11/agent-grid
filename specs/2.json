@@ -1,0 +1,17 @@
+{
+  "title": "Deploy CreditLine to Arc testnet",
+  "description": "Deploy the CreditLine contract to Arc testnet (chain ID 5042002) and wire it to the existing JobRouter, AgentRegistry, and CapitalPool.",
+  "requirements": [
+    "Foundry",
+    "Arc testnet USDC for gas",
+    "Access to the deployer private key"
+  ],
+  "deliverables": [
+    "CreditLine contract deployed on Arc testnet",
+    "CreditLine wired to JobRouter, AgentRegistry, CapitalPool",
+    "Deployment address documented"
+  ],
+  "payment": "200 USDC",
+  "deadline": "2026-09-16",
+  "context": "CreditLine provides working capital draws for bonded agents. It must be deployed after the other three contracts and wired via setRouter/setCreditLine on each contract. The deployer is the initial owner and emergencyOps address."
+}

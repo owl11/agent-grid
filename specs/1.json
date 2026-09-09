@@ -1,0 +1,15 @@
+{
+  "title": "Write unit tests for CapitalPool",
+  "description": "Add comprehensive unit tests for the CapitalPool contract covering deposit, withdraw, revenue distribution, and inflation attack resistance.",
+  "requirements": [
+    "Foundry",
+    "Solidity 0.8.20",
+    "Familiarity with ERC-4626 vault mechanics"
+  ],
+  "deliverables": [
+    "test/CapitalPool.t.sol"
+  ],
+  "payment": "100 USDC",
+  "deadline": "2026-09-15",
+  "context": "The CapitalPool is an ERC-4626 vault that accepts USDC deposits, mints shares, and distributes settlement revenue to LPs. Tests should cover: deposit/withdraw round-trip, price-per-share monotonicity, revenue raises pps without minting, inflation attack cost bounds, and maxRedeem enforcement."
+}

@@ -309,9 +309,15 @@ contract JobHandler is CommonBase, StdUtils, StdAssertions {
         if (rec.state != IJobRouter.State.SUBMITTED) return;
         if (block.timestamp > rec.approvalDeadline) return; // window lapsed — timeoutSettle path
 
+        // snapshot BEFORE settlement — _postSettle asserts deltas against these
+        uint256 walletBefore = usdc.balanceOf(rec.assignee);
+        uint256 poolBefore = usdc.balanceOf(address(pool));
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 routerBefore = usdc.balanceOf(address(router));
+
         vm.prank(rec.originator);
         router.approve(rec.id);
-        _postSettle(rec);
+        _postSettle(rec, walletBefore, poolBefore, treasuryBefore, routerBefore);
         ghostSettles += 1;
     }
 
@@ -322,8 +328,14 @@ contract JobHandler is CommonBase, StdUtils, StdAssertions {
         if (rec.state != IJobRouter.State.SUBMITTED) return;
         if (block.timestamp <= rec.approvalDeadline) return; // still open — approve() path
 
+        // snapshot BEFORE settlement — _postSettle asserts deltas against these
+        uint256 walletBefore = usdc.balanceOf(rec.assignee);
+        uint256 poolBefore = usdc.balanceOf(address(pool));
+        uint256 treasuryBefore = usdc.balanceOf(treasury);
+        uint256 routerBefore = usdc.balanceOf(address(router));
+
         router.timeoutSettle(rec.id);
-        _postSettle(rec);
+        _postSettle(rec, walletBefore, poolBefore, treasuryBefore, routerBefore);
         ghostTimeouts += 1;
     }
 
@@ -383,16 +395,18 @@ contract JobHandler is CommonBase, StdUtils, StdAssertions {
     /// @dev Per-settle exactness: replicates _settleSuccess's split math (incl. the
     ///      wage cap) and asserts every delta — executor → wallet, lp → pool
     ///      (revenue), treasury → treasury, escrow released 1:1. Ghosts update
-    ///      only after the assertions pass.
-    function _postSettle(JobRec storage rec) internal {
+    ///      only after the assertions pass. Balance snapshots must be taken BEFORE
+    ///      the router call — this function only asserts post-state against them.
+    function _postSettle(
+        JobRec storage rec,
+        uint256 walletBefore,
+        uint256 poolBefore,
+        uint256 treasuryBefore,
+        uint256 routerBefore
+    ) internal {
         (uint256 executor, uint256 lp, uint256 treasuryAmt) =
             _expectedSplit(rec.payment, rec.executorBps, rec.lpBps, rec.treasuryBps);
         assertEq(executor + lp + treasuryAmt, rec.payment, "I4: split must sum to payment exactly");
-
-        uint256 walletBefore = usdc.balanceOf(rec.assignee);
-        uint256 poolBefore = usdc.balanceOf(address(pool));
-        uint256 treasuryBefore = usdc.balanceOf(treasury);
-        uint256 routerBefore = usdc.balanceOf(address(router));
 
         assertEq(usdc.balanceOf(rec.assignee), walletBefore + executor, "settle: executor paid");
         assertEq(usdc.balanceOf(address(pool)), poolBefore + lp, "settle: lp to pool");
