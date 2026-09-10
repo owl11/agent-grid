@@ -263,7 +263,7 @@ server.tool(
     }
     // Spec linkage: onchain specHash first (cryptographic — job ids recycle
     // across deployments, filenames don't), local file by id as fallback.
-    // Asserts are listed verbatim for the agent/judge to evaluate; live
+    // Asserts are listed verbatim for the agent/originator to evaluate; live
     // measurement of feed asserts belongs to the keeper pack.
     let spec = loadLocalSpecs()[String(j.specHash).toLowerCase()]?.spec ?? null;
     if (!spec?.verification) {

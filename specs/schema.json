@@ -18,7 +18,7 @@
         "type": {
           "type": "string",
           "enum": ["oracle-poke", "upkeep", "data", "generic"],
-          "description": "oracle-poke/upkeep/data outcomes are checkable by anyone (onchain state or deterministic re-execution); generic needs a human judge."
+          "description": "oracle-poke/upkeep/data outcomes are checkable by anyone (onchain state or deterministic re-execution); generic needs a human reviewer."
         },
         "chainId": { "type": "integer" },
         "contract": { "type": "string" },
