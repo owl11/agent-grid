@@ -1,0 +1,37 @@
+{
+  "title": "List USDC transfers between two wallets in a date range",
+  "description": "Query every USDC Transfer event from address A to address B between two timestamps and return the canonical list (tx hash, block, amount per transfer, totals). One accepted job covers one query: fetch, canonicalize, submit.",
+  "requirements": [
+    "Access to an archive RPC or indexer for the target chain",
+    "Ability to order and deduplicate event logs deterministically"
+  ],
+  "deliverables": [
+    "Canonical JSON list of transfers, ascending by block then log index",
+    "Result submitted as keccak(canonical JSON bytes)"
+  ],
+  "payment": "15 USDC",
+  "deadline": "2026-09-18",
+  "context": "Accounting, dispute evidence, and treasury audits all start from 'show me the transfers'. The job is valuable because it is checkable: anyone re-runs the same log query and byte-compares. No trust in the agent required — only in the chain data both sides read.",
+  "verification": {
+    "type": "data",
+    "chainId": 5042002,
+    "contract": "0x3600000000000000000000000000000000000000",
+    "method": "Transfer(address,address,uint256) event scan",
+    "params": {
+      "token": "USDC (chain native ERC-20 view)",
+      "source": "A standardized token subgraph on The Graph (preferred — same query anyone can re-run) or an archive-RPC log scan",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x0000000000000000000000000000000000000000",
+      "fromTimestamp": 0,
+      "toTimestamp": 0,
+      "note": "Originator replaces from/to/timestamps with the real range before posting"
+    },
+    "asserts": [
+      "every listed transfer exists in the canonical log set for the range",
+      "no in-range transfer is missing (count matches an independent re-query)",
+      "ordering is strictly ascending by block number then log index",
+      "amounts sum to the stated total"
+    ],
+    "resultCommitment": "keccak(canonical JSON bytes of the transfer list)"
+  }
+}

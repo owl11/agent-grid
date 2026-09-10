@@ -10,7 +10,7 @@
 #    where the real precompile resolves fine.
 #
 #  USAGE:
-#    source .env                       # exports DEPLOYER_PRIVATE_KEY (0x…)
+#    source .env                       # exports ORIGINATOR_PRIVATE_KEY
 #    ./script/seed_jobs.sh [COUNT] [USDC_PER_JOB]
 #      COUNT        default 10
 #      USDC_PER_JOB default 2   (atomic 6dp, i.e. 2e6)
@@ -25,8 +25,12 @@ fi
 
 RPC="${ARC_TESTNET_RPC_URL:-https://rpc.testnet.arc.io}"
 USDC="0x3600000000000000000000000000000000000000"   # Arc native USDC ERC-20 view (6 dp)
-ROUTER="0xF11b9cCEcd0976A5A1F050F23fD028c6b59bD1e8" # deployed JobRouter (deploy #2, MIN_BOND=5)
-PK="${DEPLOYER_PRIVATE_KEY:?set DEPLOYER_PRIVATE_KEY in .env}"
+# Pinned to the canonical deployment — override via env after a redeploy.
+ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}" # canonical JobRouter (redeploy #4)
+POOL="${CAPITAL_POOL:?set CAPITAL_POOL (canonical pool) — jobs must never settle into an unseeded pool}"
+# Originator posts escrow — deliberately NOT the deployer (protocol ops).
+# Falls back to deployer if ORIGINATOR_PRIVATE_KEY is unset.
+PK="${ORIGINATOR_PRIVATE_KEY:?set ORIGINATOR_PRIVATE_KEY in .env (deployer key is retired — originator posts escrow)}"
 
 COUNT="${1:-10}"
 USDCPER="${2:-2}"
@@ -44,8 +48,21 @@ EXEC_DEADLINE=$(( now_ts + 86400 ))                # +1 day
 APPROVAL_WINDOW=7200                               # 2h
 
 # Exact next usable nonce (account pending txs included via the RPC).
-DEPLOYER="$(cast wallet address "$PK" 2>/dev/null || echo 0x9931C57D7a365Aeb64b8b38A821D8E762939F69f)"
-NEXT_NONCE="$(cast nonce "$DEPLOYER" --rpc-url "$RPC")"
+# No address fallback: a failed derivation aborts loudly instead of
+# posting escrow from a stale hard-coded wallet.
+ORIGINATOR="$(cast wallet address "$PK")"
+NEXT_NONCE="$(cast nonce "$ORIGINATOR" --rpc-url "$RPC")"
+
+# Genesis guard: refuse to post if the pool has no shares. Settlement revenue
+# landing in an empty pool strands value and imprints a distorted genesis
+# price permanently (proportional deposits preserve it — it never washes out).
+# Run ./script/seed_pool.sh first; it pins pricePerShare at exactly 1.0.
+SUPPLY="$(cast call "$POOL" 'totalSupply()(uint256)' --rpc-url "$RPC" | awk '{print $1}')"
+if (( SUPPLY == 0 )); then
+  echo "FATAL: pool $POOL has zero shares — seed it first:" >&2
+  echo "  CAPITAL_POOL=$POOL ./script/seed_pool.sh 10" >&2
+  exit 1
+fi
 
 echo "=== seed_jobs — Arc testnet (native USDC) ==="
 echo "  router          : $ROUTER"

@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AgentGrid job spec",
+  "type": "object",
+  "required": ["title", "description", "requirements", "deliverables", "payment", "deadline", "context"],
+  "properties": {
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "requirements": { "type": "array", "items": { "type": "string" } },
+    "deliverables": { "type": "array", "items": { "type": "string" } },
+    "payment": { "type": "string" },
+    "deadline": { "type": "string" },
+    "context": { "type": "string" },
+    "verification": {
+      "type": "object",
+      "required": ["type", "asserts", "resultCommitment"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["oracle-poke", "upkeep", "data", "generic"],
+          "description": "oracle-poke/upkeep/data outcomes are checkable by anyone (onchain state or deterministic re-execution); generic needs a human judge."
+        },
+        "chainId": { "type": "integer" },
+        "contract": { "type": "string" },
+        "method": { "type": "string" },
+        "params": { "type": "object" },
+        "asserts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Human-readable checks anyone can run against chain/subgraph state before approving."
+        },
+        "resultCommitment": {
+          "type": "string",
+          "description": "How the agent must build resultHash, e.g. keccak(txHash, postState)."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

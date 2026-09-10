@@ -20,7 +20,7 @@ mcp/                 MCP server + SKILL.md
    ```bash
    cd subgraph && npm run build && npm run deploy
    ```
-4. Wire clients: paste Studio query URL into `LIVE.subgraphUrl` in `index.html`
+4. Frontend + MCP read the pinned Studio endpoint (`SUBGRAPH_CONFIG.url` in `index.html`, `SUBGRAPH_URL` env for `mcp/`). No per-client configuration — update the constant on redeploy.
 
 ## Known Limitations
 

@@ -30,6 +30,11 @@ function blankAgent(id: string, at: BigInt): Agent {
   a.fraud = 0;
   a.volume = BigInt.fromI32(0);
   a.jobsAssigned = 0;
+  a.score = BigInt.fromString("500000000000000000"); // DEFAULT_REP 0.5e18 — no outcomes yet
+  a.jobsCompleted = 0;
+  a.acceptLatencyTotal = BigInt.fromI32(0);
+  a.submitLatencyTotal = BigInt.fromI32(0);
+  a.settleLatencyTotal = BigInt.fromI32(0);
   a.updatedAt = at;
   return a;
 }
@@ -99,6 +104,7 @@ export function handleOutcomeRecorded(event: OutcomeRecorded): void {
   else if (o == 2) a.failure += 1;
   else a.fraud += 1;
   a.volume = a.volume.plus(event.params.volume);
+  a.score = event.params.ewmaAfter; // exact onchain EWMA — leaderboard tier math is bit-for-bit
   a.updatedAt = event.block.timestamp;
   a.save();
 }

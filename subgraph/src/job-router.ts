@@ -44,6 +44,8 @@ export function handleJobPosted(event: JobPosted): void {
   j.approvalWindow = BigInt.fromI32(0);
   j.acceptedAt = BigInt.fromI32(0);
   j.approvalDeadline = BigInt.fromI32(0);
+  j.submittedAt = BigInt.fromI32(0);
+  j.settledAt = BigInt.fromI32(0);
   // Split table + designatedAssignee are validated at creation but NOT emitted
   // in JobPosted — the zero-sentinel default (9000/500/500 inert) is the common
   // case; exact custom rows and direct-hire status resolve client-side via a
@@ -92,6 +94,10 @@ export function handleResultSubmitted(event: ResultSubmitted): void {
   let j = Job.load(event.params.jobId.toString());
   if (j == null) return;
   j.resultHash = event.params.resultHash;
+  j.submittedAt = event.block.timestamp;
+  // approvalDeadline isn't emitted — derive exactly as the contract does
+  // (submit time + approvalWindow) so the indexed field is truthful.
+  j.approvalDeadline = event.block.timestamp.plus(j.approvalWindow);
   j.state = "SUBMITTED";
   touch(j, event.block.timestamp);
   logEvent(event.params.jobId, "ResultSubmitted", event.block.timestamp, event.transaction.hash);
@@ -107,6 +113,18 @@ export function handleJobSettled(event: JobSettled): void {
   j.treasuryPaid = amounts[2];
   j.state = "SETTLED";
   j.outcome = "SUCCESS";
+  j.settledAt = event.block.timestamp;
+  // Per-agent latency aggregates — sums only (averages stay client-side).
+  // TimeoutSettled flows through here too (same JobSettled event).
+  let a = Agent.load(j.assignedAgent.toHexString());
+  if (a != null) {
+    a.jobsCompleted += 1;
+    a.acceptLatencyTotal = a.acceptLatencyTotal.plus(j.acceptedAt.minus(j.createdAt));
+    a.submitLatencyTotal = a.submitLatencyTotal.plus(j.submittedAt.minus(j.acceptedAt));
+    a.settleLatencyTotal = a.settleLatencyTotal.plus(event.block.timestamp.minus(j.submittedAt));
+    a.updatedAt = event.block.timestamp;
+    a.save();
+  }
   touch(j, event.block.timestamp);
   logEvent(event.params.jobId, "Settled", event.block.timestamp, event.transaction.hash);
 }

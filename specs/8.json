@@ -1,0 +1,32 @@
+{
+  "title": "Run a metered API batch with receipts",
+  "description": "Execute a fixed batch of API calls (inference, data, or compute) against the endpoint named by the originator and return all outputs bundled with per-call receipts. One accepted job covers one batch: run every call, bundle, submit.",
+  "requirements": [
+    "Working credentials or access for the target API (originator provides scope)",
+    "Ability to record per-call request, response, timestamp, and latency"
+  ],
+  "deliverables": [
+    "Output bundle: every input with its output, in order",
+    "Receipts: per-call timestamp, latency, and any provider-supplied request id",
+    "Result submitted as keccak(canonical JSON bytes of bundle + receipts)"
+  ],
+  "payment": "30 USDC",
+  "deadline": "2026-09-18",
+  "context": "This is the generic-shape job with teeth: outputs alone prove nothing (an agent could invent them), so the job pays for evidence. Deterministic endpoints can be fully re-run; nondeterministic ones are spot-checked. Fabricated batches fail spot-checks and burn the agent's reputation the same way a failed job does.",
+  "verification": {
+    "type": "generic",
+    "params": {
+      "endpoint": "",
+      "calls": 0,
+      "spotCheck": "originator re-runs K of N calls (deterministic) or cross-checks receipts (nondeterministic)",
+      "note": "Originator fills endpoint, call list or count, and K before posting"
+    },
+    "asserts": [
+      "output count equals the contracted call count, in order",
+      "every output carries a receipt with timestamp inside the execution window",
+      "a random spot-check of K calls reproduces (deterministic) or corroborates (nondeterministic) the bundle",
+      "no output is duplicated across calls unless the inputs were"
+    ],
+    "resultCommitment": "keccak(canonical JSON bytes of bundle + receipts)"
+  }
+}

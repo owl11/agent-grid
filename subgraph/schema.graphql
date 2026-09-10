@@ -22,6 +22,8 @@ type Job @entity(immutable: false) {
   approvalWindow: BigInt!
   acceptedAt: BigInt!
   approvalDeadline: BigInt!
+  submittedAt: BigInt! # 0 until ResultSubmitted — with acceptedAt gives submit latency
+  settledAt: BigInt! # 0 until JobSettled — with submittedAt gives settle latency
   executorBps: Int!
   lpBps: Int!
   treasuryBps: Int!
@@ -54,6 +56,12 @@ type Agent @entity(immutable: false) {
   fraud: Int!
   volume: BigInt!
   jobsAssigned: Int!
+  score: BigInt! # last onchain EWMA (1e18 scale, 0.5e18 default) — with volume
+  # this recomputes repScore/tier bit-for-bit offchain (see SKILL.md)
+  jobsCompleted: Int! # SETTLED jobs — with jobsAssigned gives completion rate
+  acceptLatencyTotal: BigInt! # sum(acceptedAt - createdAt) over settled jobs
+  submitLatencyTotal: BigInt! # sum(submittedAt - acceptedAt) over settled jobs
+  settleLatencyTotal: BigInt! # sum(settledAt - submittedAt) over settled jobs
   updatedAt: BigInt!
 }
 

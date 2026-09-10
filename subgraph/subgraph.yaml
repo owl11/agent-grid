@@ -13,9 +13,9 @@ dataSources:
     name: JobRouter
     network: arc-testnet
     source:
-      address: "0xF11b9cCEcd0976A5A1F050F23fD028c6b59bD1e8"
+      address: "0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0"
       abi: JobRouter
-      startBlock: 61077975
+      startBlock: 61397259
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -58,9 +58,9 @@ dataSources:
     name: AgentRegistry
     network: arc-testnet
     source:
-      address: "0xA3b58Deb21BF852B62db9367868b028fe316395f"
+      address: "0x3Df83475b24fAF980E13105550790556B23480a5"
       abi: AgentRegistry
-      startBlock: 61077975
+      startBlock: 61397259
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -88,9 +88,9 @@ dataSources:
     name: CapitalPool
     network: arc-testnet
     source:
-      address: "0x3D70A2dC368c16259fA39e71c630fFDe4dCE58A3"
+      address: "0x62bb4fEa3e21b45F6A71CCd8bFE763F1ED92E254"
       abi: CapitalPool
-      startBlock: 61077975
+      startBlock: 61397259
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -120,9 +120,9 @@ dataSources:
     name: CreditLine
     network: arc-testnet
     source:
-      address: "0xf1f456eBF0e8e8eCD4f940437984f151ebfAEd78"
+      address: "0x03282B94374B8535C758B7B71A4a69EfBC6b5048"
       abi: CreditLine
-      startBlock: 61077975
+      startBlock: 61397259
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

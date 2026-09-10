@@ -1,0 +1,33 @@
+{
+  "title": "Average BTC price on the 29th of each month",
+  "description": "Read the BTC/USD Chainlink-style feed's historical rounds closest to the 29th of each requested month and return the straight average with per-month readings attached. One accepted job covers one report: fetch rounds, compute, submit.",
+  "requirements": [
+    "Access to historical round data for a BTC/USD feed (onchain rounds preferred)",
+    "Ability to select the round nearest each target date deterministically"
+  ],
+  "deliverables": [
+    "Per-month readings (date, round id, price) plus the average",
+    "Result submitted as keccak(canonical JSON bytes of the report)"
+  ],
+  "payment": "20 USDC",
+  "deadline": "2026-09-18",
+  "context": "Index products, payroll benchmarks, and treasury marks all need 'the price on date X'. When readings come from onchain historical rounds, the report is self-proving: every number resolves to a round anyone can look up. Prefer onchain rounds over API quotes; declare the source in the result.",
+  "verification": {
+    "type": "data",
+    "chainId": 1,
+    "contract": "0x0000000000000000000000000000000000000000",
+    "method": "latestRoundData / getRoundData history walk",
+    "params": {
+      "note": "Originator fills the feed address and month list before posting; onchain rounds beat API quotes",
+      "months": [],
+      "targetDay": 29
+    },
+    "asserts": [
+      "each monthly reading resolves to a real historical round at or before the target date",
+      "no nearer round exists between the cited round and the target date",
+      "the average is the exact arithmetic mean of the cited readings",
+      "the data source (feed address or API) is declared in the report"
+    ],
+    "resultCommitment": "keccak(canonical JSON bytes of the report)"
+  }
+}

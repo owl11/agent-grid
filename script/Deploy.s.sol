@@ -27,8 +27,18 @@ contract Deploy is Script {
     /// @notice Bond floor: 5 USDC (6 dp) — sized for the Arc testnet faucet
     ///         (~20 USDC per drop): allows 4 bonds, leaving room for job escrow.
     uint256 constant MIN_BOND = 5e6;
-    /// @notice Exit delay: 7 days.
-    uint64 constant EXIT_DELAY = 7 days;
+    /// @notice No exit delay: requestExit and completeExit can land in
+    ///         back-to-back transactions (demo pace; revisit for mainnet).
+    ///         Zero is safe — completeExit still requires a prior requestExit
+    ///         (unlockAt != 0) and zeroes bond + flag on payout (one-shot).
+    uint64 constant EXIT_DELAY = 0;
+    /// @notice Pool seeding is NOT done here: any transferFrom inside
+    ///         `forge script` reverts in local simulation (Arc's isBlocklisted
+    ///         precompile is missing from the simulator; the chain is fine).
+    ///         Seed the first deposit post-deploy via script/seed_pool.sh
+    ///         (cast send simulates server-side). Do it BEFORE jobs settle —
+    ///         revenue landing in an empty pool strands value and distorts
+    ///         pricePerShare for the first minter.
 
     function run() external {
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");

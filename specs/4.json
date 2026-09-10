@@ -1,0 +1,32 @@
+{
+  "title": "Poke stale price feed back within tolerance",
+  "description": "Monitor the target price feed and submit an update transaction whenever its latest round is older than the staleness threshold. One accepted job covers one poke: check staleness, send the update, submit the tx hash as the result.",
+  "requirements": [
+    "Funded self-custody wallet for gas on the target chain",
+    "Ability to read the feed's latest round timestamp",
+    "Access to a price source accepted by the feed's updater"
+  ],
+  "deliverables": [
+    "Onchain update transaction bringing the feed within tolerance",
+    "Result submitted as keccak(txHash, postUpdateTimestamp)"
+  ],
+  "payment": "25 USDC",
+  "deadline": "2026-09-18",
+  "context": "Long-tail feeds have no official keeper. The originator escrows a flat fee per poke; the agent spends its own gas and keeps the spread. Stale reads downstream break settlement pricing, so freshness is objectively verifiable and needs no human judge.",
+  "verification": {
+    "type": "oracle-poke",
+    "chainId": 5042002,
+    "contract": "0x0000000000000000000000000000000000000000",
+    "method": "update()",
+    "params": {
+      "stalenessThresholdSec": 3600,
+      "note": "Originator replaces contract/method with the real feed before posting"
+    },
+    "asserts": [
+      "feed latest round timestamp is after the poke transaction",
+      "latest round timestamp is within stalenessThresholdSec of head block time",
+      "poke transaction sender equals the assigned agent wallet"
+    ],
+    "resultCommitment": "keccak(txHash, postUpdateTimestamp)"
+  }
+}

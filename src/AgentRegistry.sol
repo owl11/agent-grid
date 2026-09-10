@@ -112,6 +112,13 @@ contract AgentRegistry is IAgentRegistry {
         uint256 amount = a.bond;
         if (amount == 0) revert NotBonded();
         if (a.unlockAt == 0 || block.timestamp < a.unlockAt) revert UnlockPending();
+        // State BEFORE transfer (checks-effects-interactions): the money and
+        // the exit flag reset, but the identity record (agentId, rep, adapter)
+        // persists — exiting can't cleanse reputation, and re-bonding revives
+        // the same agentId. Without the zeroing, completeExit paid out on
+        // every call (repeatable full withdrawal).
+        a.bond = 0;
+        a.unlockAt = 0;
         SETTLEMENT_TOKEN.safeTransfer(msg.sender, amount);
         // delete agents[msg.sender]; we cant delete agents from our registry since it can be taken advantage off to cleanse bad reputation
         emit Exited(msg.sender, amount);

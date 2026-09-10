@@ -90,6 +90,25 @@ contract AgentRegistryTest is Test {
         vm.stopPrank();
     }
 
+    function test_completeExit_PaysOnce_ThenLocks() public {
+        vm.startPrank(user);
+        usdc.mint(user, MIN_BOND);
+        usdc.approve(address(registry), MIN_BOND);
+
+        registry.bondIn(IAgentIdentity(address(0)), 0, MIN_BOND);
+        registry.requestExit();
+        vm.warp(block.timestamp + DELAY + 1);
+        uint256 before = usdc.balanceOf(user);
+        registry.completeExit();
+        assertEq(usdc.balanceOf(user), before + MIN_BOND, "exit pays bond once");
+        assertEq(registry.bondOf(user), 0, "bond zeroed");
+        assertEq(registry.unlockAt(user), 0, "exit flag cleared");
+        assertTrue(registry.agentIdOf(user) != bytes32(0), "identity record persists (no rep cleanse)");
+        vm.expectRevert(IAgentRegistry.NotBonded.selector);
+        registry.completeExit();
+        vm.stopPrank();
+    }
+
     function test_slash_RouterOnly() public _bondedAgent {
         address adversary = makeAddr("villain");
         vm.expectRevert(IAgentRegistry.UnauthorizedCaller.selector);

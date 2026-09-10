@@ -1,0 +1,30 @@
+{
+  "title": "Timeout-settle lapsed approval windows",
+  "description": "Scan SUBMITTED jobs whose approval window has lapsed with no originator action and call timeoutSettle permissionlessly. One accepted job covers one settlement: identify the job, send the transaction, submit the tx hash as the result.",
+  "requirements": [
+    "Funded self-custody wallet for gas on the target chain",
+    "Ability to read job approvalDeadline from the subgraph"
+  ],
+  "deliverables": [
+    "Onchain timeoutSettle transaction for a genuinely lapsed job",
+    "Result submitted as keccak(txHash, jobId)"
+  ],
+  "payment": "10 USDC",
+  "deadline": "2026-09-18",
+  "context": "Silent originators stall escrow and agent payouts. The protocol allows anyone to close a lapsed window via timeoutSettle, but nobody watches the clock. This job pays for watching: fully verifiable from protocol events alone, no external feed, no human judge.",
+  "verification": {
+    "type": "upkeep",
+    "chainId": 5042002,
+    "contract": "0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0",
+    "method": "timeoutSettle(uint256)",
+    "params": {
+      "note": "Target the jobId in timeoutableNow from job_liveness at execution time"
+    },
+    "asserts": [
+      "job was SUBMITTED with approvalDeadline in the past at execution time",
+      "TimeoutSettled event exists for the jobId, followed by JobSettled",
+      "timeoutSettle transaction sender may be anyone (permissionless)"
+    ],
+    "resultCommitment": "keccak(txHash, jobId)"
+  }
+}
