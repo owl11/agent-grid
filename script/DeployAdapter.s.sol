@@ -10,7 +10,7 @@ import {ERC8004Adapter} from "../src/ERC8004Adapter.sol";
 ///         per-bond via bondIn(adapter, externalId, amount)).
 ///         Run:  forge script script/DeployAdapter.s.sol \
 ///                 --rpc-url arc_testnet --broadcast
-///         Then set ARC_8004.adapter in index.html to the printed address.
+
 contract DeployAdapter is Script {
     /// @notice Arc testnet ERC-8004 IdentityRegistry (agent NFTs).
     address constant ARC_IDENTITY_REGISTRY = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
