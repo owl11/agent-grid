@@ -1,28 +1,10 @@
-// AgentGrid MCP server — stdio transport.
+// AgentGrid MCP server (stdio). State reads come from the AgentGrid subgraph
+// (SUBGRAPH_URL); writes are returned as signable payloads {to,data,value,
+// chainId} that the agent signs itself — this server never sees private keys.
+// RPC_URL is read-only, used only to link submit-tx senders during verify.
 //
-// LAYERING (doctrine — keep it):
-// - CORE (this file): protocol state via The Graph, receipt reads, file
-//   mechanics, signable-payload builders. Never interprets domain semantics.
-// - PACKS (keeper.js, ...): domain tooling for agent verticals, mounted
-//   conditionally via AGENTGRID_PACKS (default: keeper on). Packs may read
-//   feeds and specs; they may not touch settlement, reputation, or escrow.
-//
-// READS (load-bearing on The Graph): list_jobs, get_job, list_agents,
-// pool_stats, recent_events — all served from the AgentGrid subgraph on
-// Subgraph Studio. No chain RPC needed for reads.
-//
-// VERIFY reads (read-only RPC, never signs): verify_job_result checks the
-// submit-tx sender via receipt. RPC_URL defaults to the Arc testnet public
-// endpoint; the subgraph stays the source of truth for protocol state.
-//
-// WRITES: returned as signable payloads {to, data, value, chainId} encoded
-// with viem from the contract ABIs. The agent signs with its own wallet
-// (viem/ethers/Metamask); this server never sees private keys.
-//
-// Env: SUBGRAPH_URL (required for reads), JOB_ROUTER, AGENT_REGISTRY,
-// CAPITAL_POOL, CREDIT_LINE, CHAIN_ID (default 5042002 = Arc testnet),
-// RPC_URL (default https://rpc.testnet.arc.io, reads only), VOL_CAP,
-// AGENTGRID_PACKS (comma list, default "keeper"; empty = core only).
+// Env: SUBGRAPH_URL*, JOB_ROUTER, AGENT_REGISTRY, CAPITAL_POOL, CREDIT_LINE,
+// CHAIN_ID (default 5042002), RPC_URL, VOL_CAP, AGENTGRID_PACKS ("keeper").
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { encodeFunctionData, parseUnits } from "viem";
@@ -67,7 +49,7 @@ function tx(to, data) {
   return { to, data, value: "0", chainId: CHAIN_ID };
 }
 
-// ---------------- read-only chain access (verify paths only) ----------------
+// read-only chain access (verify paths only)
 
 async function rpc(method, params, rpcUrl) {
   const url = rpcUrl || RPC_URL;
@@ -90,7 +72,7 @@ async function txSender(txHash, rpcUrl) {
 
 const server = new McpServer({ name: "agent-grid", version: "0.1.0" });
 
-// ---------------- reads (The Graph) ----------------
+// reads (The Graph)
 
 server.tool(
   "list_jobs",
@@ -105,6 +87,17 @@ server.tool(
 );
 
 server.tool(
+  "latest_job",
+  "The newest indexed job (highest jobId / most recent createdAt).",
+  {},
+  async () => {
+    const data = await gql(`{ jobs(first: 1, orderBy: createdAt, orderDirection: desc) {
+      id originator payment state executorBps lpBps treasuryBps assignedAgent outcome createdAt execDeadline } }`);
+    return { content: [{ type: "text", text: JSON.stringify(data.jobs[0] ?? null, null, 2) }] };
+  }
+);
+
+server.tool(
   "get_job",
   "Full indexed record for one jobId, including settlement amounts and outcome.",
   { jobId: z.string() },
@@ -114,6 +107,29 @@ server.tool(
       executorBps lpBps treasuryBps assignedAgent resultHash drawnForJob opsBudget
       state executorPaid lpPaid treasuryPaid debtRepaid outcome } }`);
     return { content: [{ type: "text", text: JSON.stringify(data.job, null, 2) }] };
+  }
+);
+
+server.tool(
+  "jobs_for_agent",
+  "POSTED jobs this agent wallet can currently accept. Onchain truth: for every posted job we eth_call router.canAccept(jobId, wallet) and return the jobs that answer true (window open, bond >= payment, eligible, direct-hire match). Also reports each rejected job's reason from the same call.",
+  { wallet: z.string(), limit: z.number().min(1).max(100).default(50), rpcUrl: z.string().optional() },
+  async ({ wallet, limit, rpcUrl }) => {
+    const data = await gql(`{ jobs(orderBy: createdAt, orderDirection: desc, first: ${limit}, where: {state: "POSTED"}) {
+      id payment execDeadline createdAt designatedAssignee specHash } }`);
+    const ZERO = "0x" + "00".repeat(32);
+    const ok = [];
+    const blocked = [];
+    for (const j of data.jobs ?? []) {
+      const calldata = encodeFunctionData({
+        abi: abis.router, functionName: "canAccept", args: [BigInt(j.id), wallet],
+      });
+      const raw = await rpc("eth_call", [{ to: ADDR.router, data: calldata }, "latest"], rpcUrl);
+      const can = raw !== undefined && raw !== null && BigInt(raw).toString(2) === "1";
+      if (can) ok.push(j);
+      else blocked.push({ ...j, fee: 0, reason: "canAccept=false (window, bond, eligibility, or direct-hire mismatch)" });
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ wallet, acceptable: ok, blocked }, null, 2) }] };
   }
 );
 
@@ -150,7 +166,7 @@ server.tool(
   }
 );
 
-// ---------------- reasoning (computed over indexed data) ----------------
+// reasoning (computed over indexed data)
 
 // AgentRegistry.sol:18 — $100k USDC cap for volume factor. Env-overridable
 // so a redeploy with a new cap doesn't need a code change here.
@@ -239,8 +255,8 @@ server.tool(
       { name: "resultPresent", pass: j.resultHash !== ZERO, detail: j.resultHash },
       { name: "assigneeKnown", pass: j.assignedWallet !== ZERO_ADDR, detail: j.assignedWallet },
     ];
-    // Receipt linkage: the ResultSubmitted tx must come from the assignee.
-    // Only meaningful once a result exists; otherwise n/a (not a failure).
+    // Receipt linkage: the ResultSubmitted tx must be sent by the assignee;
+    // only meaningful once a result exists, otherwise n/a (not a failure).
     if (j.resultHash !== ZERO) {
       try {
         const ev = await gql(`{ jobEvents(where: {jobId: "${jobId}", kind: "ResultSubmitted"}, first: 1) { txHash } }`);
@@ -262,9 +278,8 @@ server.tool(
       checks.push({ name: "submitterMatches", pass: true, detail: "n/a (no result submitted)" });
     }
     // Spec linkage: onchain specHash first (cryptographic — job ids recycle
-    // across deployments, filenames don't), local file by id as fallback.
-    // Asserts are listed verbatim for the agent/originator to evaluate; live
-    // measurement of feed asserts belongs to the keeper pack.
+    // across deployments), local file by id as fallback. Asserts are listed
+    // verbatim; live feed measurement lives in the keeper pack.
     let spec = loadLocalSpecs()[String(j.specHash).toLowerCase()]?.spec ?? null;
     if (!spec?.verification) {
       spec = readSpecFile(jobId);
@@ -277,7 +292,7 @@ server.tool(
   }
 );
 
-// ---------------- writes (signable payloads) ----------------
+// writes (signable payloads)
 
 server.tool(
   "bond_in_tx",
@@ -347,7 +362,7 @@ server.tool(
   }
 );
 
-// ---------------- packs (domain tooling, conditional) ----------------
+// packs (domain tooling, conditional)
 
 if (PACKS.includes("keeper")) {
   const { registerKeeperTools } = await import("./keeper.js");

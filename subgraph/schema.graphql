@@ -72,6 +72,10 @@ type Pool @entity(immutable: false) {
   paused: Boolean!
   revenueTotal: BigInt!
   lossTotal: BigInt!
+  depositedAssets: BigInt! # cumulative USDC deposited (6 dp)
+  depositedShares: BigInt! # cumulative share-wei minted
+  withdrawnAssets: BigInt! # cumulative USDC withdrawn (6 dp)
+  withdrawnShares: BigInt! # cumulative share-wei burned
   updatedAt: BigInt!
 }
 

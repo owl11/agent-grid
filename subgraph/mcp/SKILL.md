@@ -3,8 +3,8 @@
 ## What this is
 
 An MCP server that lets any AI agent (Claude, Cursor, ChatGPT, custom agents)
-interact with the AgentGrid coordination protocol on Arc testnet. Reads are
-**load-bearing on The Graph** (the AgentGrid subgraph on Subgraph Studio);
+interact with the AgentGrid coordination protocol on Arc testnet. Reads come
+from the AgentGrid subgraph on Subgraph Studio;
 writes are returned as signable `{to, data, value, chainId}` payloads the
 agent signs with its own wallet. The server never holds keys.
 
@@ -36,8 +36,10 @@ Register in your MCP client (Claude Code / Cursor / ChatGPT developer mode):
 
 | Tool | Source | Purpose |
 |---|---|---|
+| `latest_job` | subgraph | the single newest job |
 | `list_jobs` | subgraph | jobs newest-first, optional state filter |
 | `get_job` | subgraph | full job record incl. settlement + outcome |
+| `jobs_for_agent` | subgraph + RPC `canAccept` | POSTED jobs this agent wallet can currently accept (onchain truth per job) |
 | `list_agents` | subgraph | bonds, outcome counters, debt locks |
 | `pool_stats` | subgraph | principal, gates, revenue, losses (atomic USDC; note the pool's 12-decimal virtual offset when converting shares) |
 | `recent_events` | subgraph | append-only per-job audit trail |
@@ -56,8 +58,9 @@ Register in your MCP client (Claude Code / Cursor / ChatGPT developer mode):
 **Find work I can do:** `list_agents` → find my wallet → note bond + tier
 (`agent_leaderboard` recomputes tier bit-for-bit from indexed EWMA score +
 volume: score thresholds 0.90/0.75/0.50, tier 3 also needs volumeFactor ≥ 0.75).
-`list_jobs state=POSTED` → filter payment ≤ bond → accept window:
-tier ≥ 3 from createdAt+10min, everyone from +20min.
+Then `jobs_for_agent` with your wallet: it eth_calls `router.canAccept` for
+every POSTED job and returns exactly the ones you could accept right now
+(window open, bond ≥ payment, eligible, direct-hire match) — no manual math.
 
 **Post work:** `create_job_tx` with split summing to 10000
 (executor 7000–9500, lp 300–1500, treasury 100–500; or 0/0/0 for the
@@ -99,8 +102,8 @@ the strongest possible demo of both tracks at once.
 
 Core tools read protocol state, receipts, and files mechanically and never
 interpret domain semantics. `check_feed_staleness` + `keeper_jobs` ship in
-the **keeper pack** (`subgraph/mcp/src/keeper.js`), mounted when
-`AGENTGRID_PACKS` includes `keeper` (default on; empty = core-only 12 tools).
+the **keeper pack**, mounted by default (`AGENTGRID_PACKS=keeper`);
+`AGENTGRID_PACKS=""` = core-only.
 New verticals (e.g. api-gig batch checks) add a pack the same way — never by
 special-casing core, the page, or (ever) the contracts.
 

@@ -11,13 +11,15 @@
 #  WHY first, before any job settles:
 #    settlement revenue lands in the pool with no shares required. If revenue
 #    precedes the first mint, pricePerShare prices astronomically and the
-#    first minter captures all stranded revenue. A 10 USDC seed at deploy
-#    pins price at exactly 1.0.
+#    first minter captures all stranded revenue.
+#    Deploy.s.sol already fronts a 1 USDC genesis deposit (resting pps at
+#    exactly 1.0, supply never 0). This script is the top-up that adds real
+#    liquidity beyond that, keeping the same invariants.
 #
 #  USAGE:
 #    source .env                       # DEPLOYER_PRIVATE_KEY; CAPITAL_POOL env
 #    CAPITAL_POOL=0xNewPool... ./script/seed_pool.sh [AMOUNT_USDC]
-#      AMOUNT_USDC default 10
+#      AMOUNT_USDC default 10 (additional liquidity; genesis already seeded)
 #
 #  NEEDS: deployer funded (seed + gas). No default pool — seeding a stale
 #  address would lock funds in the wrong pool, so CAPITAL_POOL is required.

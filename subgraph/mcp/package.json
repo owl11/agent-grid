@@ -1,7 +1,7 @@
 {
   "name": "agent-grid-mcp",
   "version": "0.1.0",
-  "description": "MCP server: any agent queries live AgentGrid protocol state via The Graph and builds signable transaction payloads. Reads are load-bearing on the subgraph; writes are returned as {to, data, value} for the agent's own signer — the server never holds keys.",
+  "description": "MCP server: any agent queries live AgentGrid protocol state via The Graph and builds signable transaction payloads. Writes are returned as {to, data, value} for the agent's own signer — the server never holds keys.",
   "type": "module",
   "bin": {
     "agent-grid-mcp": "./src/index.js"

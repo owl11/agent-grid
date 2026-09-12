@@ -10,6 +10,8 @@ interface ICapitalPool {
 
     error NotCreditLine();
     error NotJobRouter();
+    /// @notice Withdrawal exceeds the caller's share balance.
+    error InsufficientShares();
     /// @notice Withdrawal exceeds currently free liquidity.
     error InsufficientLiquidity();
     /// @notice `lendTo` called while the pool-side lending gate is OFF.

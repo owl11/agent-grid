@@ -66,7 +66,7 @@ contract CapitalPoolTest is Test {
         uint256 maxShares = pool.maxRedeem(user); // min(balance, liquidity-backed shares)
         assertEq(maxShares, shares, "idle pool: liquidity cap == balance cap");
 
-        vm.expectRevert(); // ERC4626ExceededMaxRedeem
+        vm.expectRevert(ICapitalPool.InsufficientShares.selector);
         pool.withdraw(maxShares + 1);
 
         // atomicity: nothing moved on the failed withdraw

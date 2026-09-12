@@ -1,9 +1,5 @@
-// CapitalPool mappings — singleton Pool row ("1"). Deposits/withdrawals flow
-// through the OZ ERC-4626 Deposit/Withdraw events (the legacy Deposited /
-// Withdrawn events are commented out in the implementation and never fire).
-// totalPrincipal is NOT tracked here: the current contract no longer emits
-// TotalPrincipalChanged, so the outstanding-principal ledger is driven by the
-// CreditLine datasource (Drawn/Repaid/Slashed) writing the same Pool row.
+// Deposit/Withdraw are the OZ ERC-4626 events; totalPrincipal arrives from the
+// CreditLine datasource (the contract no longer emits TotalPrincipalChanged).
 import { BigInt } from "@graphprotocol/graph-ts";
 import {
   Deposit,
@@ -25,6 +21,10 @@ function pool(at: BigInt): Pool {
     p.paused = false;
     p.revenueTotal = BigInt.fromI32(0);
     p.lossTotal = BigInt.fromI32(0);
+    p.depositedAssets = BigInt.fromI32(0);
+    p.depositedShares = BigInt.fromI32(0);
+    p.withdrawnAssets = BigInt.fromI32(0);
+    p.withdrawnShares = BigInt.fromI32(0);
     p.updatedAt = at;
   }
   return p;
@@ -32,12 +32,16 @@ function pool(at: BigInt): Pool {
 
 export function handleDeposit(event: Deposit): void {
   let p = pool(event.block.timestamp);
+  p.depositedAssets = p.depositedAssets.plus(event.params.assets);
+  p.depositedShares = p.depositedShares.plus(event.params.shares);
   p.updatedAt = event.block.timestamp;
   p.save();
 }
 
 export function handleWithdraw(event: Withdraw): void {
   let p = pool(event.block.timestamp);
+  p.withdrawnAssets = p.withdrawnAssets.plus(event.params.assets);
+  p.withdrawnShares = p.withdrawnShares.plus(event.params.shares);
   p.updatedAt = event.block.timestamp;
   p.save();
 }

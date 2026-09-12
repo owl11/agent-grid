@@ -32,13 +32,17 @@ contract Deploy is Script {
     ///         Zero is safe — completeExit still requires a prior requestExit
     ///         (unlockAt != 0) and zeroes bond + flag on payout (one-shot).
     uint64 constant EXIT_DELAY = 0;
-    /// @notice Pool seeding is NOT done here: any transferFrom inside
-    ///         `forge script` reverts in local simulation (Arc's isBlocklisted
-    ///         precompile is missing from the simulator; the chain is fine).
-    ///         Seed the first deposit post-deploy via script/seed_pool.sh
-    ///         (cast send simulates server-side). Do it BEFORE jobs settle —
-    ///         revenue landing in an empty pool strands value and distorts
-    ///         pricePerShare for the first minter.
+    /// @notice Genesis deposit: the deployer fronts 1 USDC to the pool inside
+    ///         the deploy tx — a real first deposit. totalSupply is never 0 and
+    ///         pps is pinned at exactly 1.0, so settlement revenue can never
+    ///         land in an empty pool (which would strand value and distort the
+    ///         genesis price permanently).
+    /// @dev Arc USDC safeTransferOf (transferFrom) can revert inside forge's
+    ///      LOCAL simulation because the `isBlocklisted` precompile is missing
+    ///      from the simulator — the chain itself is fine. If simulation dies,
+    ///      re-run with `--skip-simulation`; alternatively seed post-deploy via
+    ///      script/seed_pool.sh (cast send simulates server-side).
+    uint256 constant GENESIS_DEPOSIT_USDC = 1e6; // 1 USDC (6 dp)
 
     function run() external {
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -79,6 +83,11 @@ contract Deploy is Script {
         pool.setCreditLine(address(creditLine)); // draws/repayments/losses → credit line
         router.setCredit(creditLine); // router draws → credit line
         router.setArbiter(arbiter); // dispute rulings
+
+        // ---- 6) genesis LP deposit: 1 USDC from the deployer, so the pool
+        // has real backing from block one (supply never 0, pps at 1.0). ----
+        usdc.approve(address(pool), GENESIS_DEPOSIT_USDC);
+        pool.deposit(GENESIS_DEPOSIT_USDC, deployer);
 
         vm.stopBroadcast();
 

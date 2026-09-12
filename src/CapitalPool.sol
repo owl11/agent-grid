@@ -10,8 +10,8 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 // CAN be share-attacked (donation/rounding theft);
 //  constructor commits the virtual-offset guard —
-// the pool's security is the ledger-led price + dead shares,
-//  not "lending is off."
+// the pool's security is the ledger-led price + a 1 USDC genesis deposit
+// (Deploy.s.sol), so supply is never 0.
 
 contract CapitalPool is ERC4626, ICapitalPool {
     using SafeERC20 for IERC20;
@@ -46,6 +46,7 @@ contract CapitalPool is ERC4626, ICapitalPool {
     /// @notice Locked one-arg exit — ≡ 4626 redeem(shares, msg.sender, msg.sender).
     /// Shares-IN (not assets); never pause-blocked (entry-only pause).
     function withdraw(uint256 shares) external override returns (uint256 amountOut) {
+        if (shares > balanceOf(msg.sender)) revert InsufficientShares();
         amountOut = redeem(shares, msg.sender, msg.sender); // capped maxRedeem → burn → pay
         // emit Withdrawn(msg.sender, shares, amountOut); // sharesBurned = shares, NOT pre-burn balance
     }
