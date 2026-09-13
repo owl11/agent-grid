@@ -14,7 +14,6 @@ contract AgentRegistry is IAgentRegistry {
 
     uint256 constant ALPHA = 97 * 1e16; // 97% retention per outcome (half-life ~30 days equivalent)
     uint256 constant BASE_WEIGHT = 1e18; // weight per settled job
-    uint256 constant DEFAULT_REP = 0.5e18; // 50% default for new agents
     uint256 constant VOL_CAP = 100_000e6; // $100k USDC cap for volume factor
 
     uint256 public MIN_BOND;
@@ -171,7 +170,7 @@ contract AgentRegistry is IAgentRegistry {
             r.totalVolume = next > VOL_CAP ? VOL_CAP : next;
         }
 
-        uint256 ewmaAfter = r.den == 0 ? DEFAULT_REP : (r.num * 1e18) / r.den;
+        uint256 ewmaAfter = r.den == 0 ? 0 : (r.num * 1e18) / r.den;
         emit OutcomeRecorded(jobId, agent, outcome, volume, ewmaAfter);
     }
 
@@ -202,7 +201,11 @@ contract AgentRegistry is IAgentRegistry {
 
     function repScore(address agent) public view override returns (uint256) {
         AgentRep storage r = reps[agent];
-        if (r.den == 0) return DEFAULT_REP;
+        // Empty history → 0: reputation is earned, never granted (specs.md §3 —
+        // score is pure over events, so fresh agents sit at tier 0). A granted
+        // default here leaked into tier() and CreditLine UTIL (fresh wallets
+        // drew 70% of bond vs 50% for proven low-volume agents).
+        if (r.den == 0) return 0;
         uint256 ewma = (r.num * 1e18) / r.den;
         return (ewma * volumeFactor(agent)) / 1e18; // ewma x volumeFactor
     }

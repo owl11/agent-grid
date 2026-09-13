@@ -30,7 +30,7 @@ function blankAgent(id: string, at: BigInt): Agent {
   a.fraud = 0;
   a.volume = BigInt.fromI32(0);
   a.jobsAssigned = 0;
-  a.score = BigInt.fromString("500000000000000000"); // DEFAULT_REP 0.5e18 — no outcomes yet
+  a.score = BigInt.fromString("0"); // empty history scores 0 — reputation is earned, never granted
   a.jobsCompleted = 0;
   a.acceptLatencyTotal = BigInt.fromI32(0);
   a.submitLatencyTotal = BigInt.fromI32(0);

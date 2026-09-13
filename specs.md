@@ -108,6 +108,8 @@ Append-only reputation. No discretionary score adjustments ever (P2, P5).
 score = clamp(0, 1e18, ewmaSuccess × volumeFactor)
 ewmaSuccess  : half-life ≈ 30d job-time; SUCCESS=1, FAILURE=0, FRAUD=0×5 severity
               NEUTRAL: skipped entirely (weight-zero — anti-wash property)
+              empty history (no non-NEUTRAL outcome yet) → ewmaSuccess = 0:
+              reputation is earned, never granted — fresh agents sit at tier 0
 volumeFactor : min(1, totalSettledVolume / VOLUME_CAP)  // caps whale dominance
 tier         : 3 ≥ 0.90·volFactor; 2 ≥ 0.75; 1 ≥ 0.50; else 0
 ```

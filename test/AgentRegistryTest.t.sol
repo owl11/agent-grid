@@ -279,6 +279,29 @@ contract AgentRegistryTest is Test {
         assertEq(registry.tier(a4), 0, "8S/8E ewma ~0.44e18 tier 0");
     }
 
+    /// @notice Empty history scores 0 — reputation is earned, never granted (I5:
+    ///         score is pure over events). Fresh agents are tier 0, so CreditLine
+    ///         underwriting sees UTIL[0]=50% (the conservative row), not UTIL[1].
+    function test_repScore_FreshAgent_IsZero() public {
+        _bondAgent(user);
+        assertEq(registry.repScore(user), 0, "fresh agent: no granted default");
+        assertEq(registry.tier(user), 0, "fresh agent: tier 0");
+    }
+
+    /// @notice NEUTRAL is weight-zero: no value update, no decay tick, no volume.
+    ///         A neutral-only history stays at 0, and the emitted ewmaAfter is 0 —
+    ///         the subgraph folds it, so the event and the view must agree.
+    function test_repScore_NeutralOnly_IsZero() public {
+        _bondAgent(user);
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit IAgentRegistry.OutcomeRecorded(1, user, IAgentRegistry.Outcome.NEUTRAL, 100e6, 0);
+        vm.prank(router);
+        registry.recordOutcome(user, 1, IAgentRegistry.Outcome.NEUTRAL, 100e6);
+        assertEq(registry.repScore(user), 0, "neutral-only: still 0");
+        assertEq(registry.tier(user), 0, "neutral-only: tier 0");
+        assertEq(registry.volumeFactor(user), 0, "neutral: no volume");
+    }
+
     function test_isEligible_TruthTable() public {
         address bonded = makeAddr("bonded");
         address pending = makeAddr("pending");
