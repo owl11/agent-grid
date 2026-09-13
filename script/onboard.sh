@@ -45,6 +45,15 @@
 #                                              #   script defaults to the deployed
 #                                              #   constants without it). No tx,
 #                                              #   no funding, no deposit.
+#    ./script/onboard.sh --mcp                 # DRY-RUN: print the Cursor/Claude
+#                                              #   Code mcpServers JSON block for
+#                                              #   this machine (absolute paths +
+#                                              #   live onchain defaults). No tx,
+#                                              #   no mint, no funding — just the
+#                                              #   config to paste. The .env.demo
+#                                              #   path is shown so you can run
+#                                              #   --mcp before keys are wired
+#                                              #   (the server reads them at runtime).
 #    ./script/onboard.sh --deposit [AMOUNT]    # LP seed ONLY, then stop (funds
 #                                              #   just the LP wallet). Default
 #                                              #   cash-in 50 USDC.
@@ -68,6 +77,7 @@ DEPOSIT_ONLY=0
 DEPOSIT_ARG=""
 POSITION_ONLY=0
 KEYS_ONLY=0
+MCP=0
 for a in "$@"; do
   case "$a" in
     --auto) AUTO=1 ;;
@@ -75,7 +85,8 @@ for a in "$@"; do
     --position) POSITION_ONLY=1 ;;
     --deposit) DEPOSIT_ONLY=1 ;;
     --deposit=*) DEPOSIT_ONLY=1; DEPOSIT_ARG="${a#--deposit=}" ;;
-    --keys-only) KEYS_ONLY=1 ;;
+                    --keys-only) KEYS_ONLY=1 ;;
+    --mcp) MCP=1 ;;
     *)
       if (( DEPOSIT_ONLY )) && [[ -z "$DEPOSIT_ARG" ]] && [[ "$a" =~ ^[0-9]+$ ]]; then
         DEPOSIT_ARG="$a"
@@ -187,6 +198,48 @@ SUBGRAPH="${SUBGRAPH_URL:-https://api.studio.thegraph.com/query/1758789/job-rout
 CHAIN="${CHAIN_ID:-5042002}"
 EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
 export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"   # full receipts, never stdout
+
+# ---- --mcp: dry-run. Print the Cursor/Claude Code mcpServers block for this
+# machine (absolute paths, live onchain defaults) and exit. No tx, no mint.
+# The .env.demo path is shown so users can paste this config BEFORE running
+# --keys-only — the MCP server reads the keys at runtime, not at config time.
+if (( MCP )); then
+  if [ ! -d "$JOBREPO" ]; then
+    echo "  (note: no task repo at $JOBREPO yet — run ./script/onboard.sh first or"
+    echo "   set DEMO_JOB_REPO=<path>. The .env.demo path below will be <repo>/.env.demo.)"
+  fi
+    MCP_JS="$PWD/subgraph/mcp/src/index.js"
+  echo
+  echo "=== >>> paste this into your Cursor / Claude Code mcpServers config file <<<"
+  echo
+  cat <<EOF
+{
+  "mcpServers": {
+    "agent-grid": {
+      "command": "node",
+      "args": ["$MCP_JS"],
+      "env": {
+        "SUBGRAPH_URL": "$SUBGRAPH",
+        "JOB_ROUTER": "$ROUTER",
+        "AGENT_REGISTRY": "$REGISTRY",
+        "CAPITAL_POOL": "$POOL",
+        "CREDIT_LINE": "0x060c68A7E696aa88D5d7aB37722681BD1894B783",
+        "USDC_TOKEN": "$USDC",
+        "ORACLE_ADDRESS": "$ORACLE",
+        "CHAIN_ID": "$CHAIN",
+        "RPC_URL": "$RPC",
+        "ORIGINATOR_ENV_FILE": "$DEMO_ENV",
+        "AGENT_ENV_FILE": "$DEMO_ENV"
+      }
+    }
+  }
+}
+EOF
+  echo "  (keys: ORIGINATOR_PRIVATE_KEY + AGENT_PRIVATE_KEY are read by the server from $DEMO_ENV at runtime — never paste them here.)"
+  echo
+  exit 0
+fi
+
 
 DEPOSIT_USDC="${DEMO_DEPOSIT_USDC:-6}"
 OPEN_JOBS="${DEMO_OPEN_JOBS:-1}"
