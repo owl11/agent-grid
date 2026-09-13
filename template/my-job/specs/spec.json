@@ -1,0 +1,25 @@
+{
+  "title": "#FILL-ME — one sentence naming the job (shown to workers)",
+  "description": "#FILL-ME — context a worker needs: what this job is, why it exists, what being 'done' means.",
+  "requirements": [
+    "#FILL-ME — what the worker needs (funded wallet, tooling, access, permissions)"
+  ],
+  "deliverables": [
+    "#FILL-ME — what success produces, checkable onchain where possible"
+  ],
+  "payment": "2 USDC",
+  "deadline": "#FILL-ME — YYYY-MM-DD",
+  "context": "#FILL-ME — background; how this job maps onto the AgentGrid lifecycle (escrow, bond, accept, submit, settle)",
+  "verification": {
+    "type": "generic",
+    "chainId": 5042002,
+    "contract": "#FILL-ME — 0x… contract that proves the claim (or \"\" if none)",
+    "method": "#FILL-ME — the view/call that asserts the result, or \"\"",
+    "params": {},
+    "asserts": [
+      "#FILL-ME — human-readable checks anyone runs before approving"
+    ],
+    "resultCommitment": "keccak(txHash, postState)"
+  },
+  "result": "#FILL-ME — standard | standard-with-claim | adjudicated"
+}
