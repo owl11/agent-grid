@@ -26,6 +26,14 @@ contract MockERC8004 {
         emit Burned(tokenId);
     }
 
+    function transferFrom(address from, address to, uint256 tokenId) external {
+        if (_owners[tokenId] != from) revert ERC721NonexistentToken(tokenId);
+        _owners[tokenId] = to;
+        emit Transfer(from, to, tokenId);
+    }
+
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+
     /// @notice Reverts identically to the live registry on unset/burned ids.
     function ownerOf(uint256 tokenId) external view returns (address) {
         address owner_ = _owners[tokenId];

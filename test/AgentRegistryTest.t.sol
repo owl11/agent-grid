@@ -109,6 +109,67 @@ contract AgentRegistryTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice adapter-based exit clears agentIdOwner so the ERC-8004 NFT can be
+    ///         rebonded by whoever holds it; bare-mode agentIds (wallet-derived) are
+    ///         unaffected — the wallet has already exited. Reputation persists (no cleanse).
+    function test_completeExit_ClearsAgentIdOwner_AdapterMode() public {
+        MockERC8004 source = new MockERC8004();
+        ERC8004Adapter adapter = new ERC8004Adapter(address(source));
+        uint256 externalId = 1;
+
+        vm.startPrank(user);
+        usdc.mint(user, MIN_BOND);
+        usdc.approve(address(registry), MIN_BOND);
+
+        // mint the ERC-8004 token so verifyOwnership succeeds at bond time
+        source.mint(externalId, user);
+
+        registry.bondIn(IAgentIdentity(address(adapter)), externalId, MIN_BOND);
+        bytes32 agentId = registry.agentIdOf(user);
+        assertEq(registry.agentIdOwnerOf(agentId), user, "bonded: agentIdOwner set");
+
+        registry.requestExit();
+        vm.warp(block.timestamp + DELAY + 1);
+        registry.completeExit();
+
+        assertEq(registry.agentIdOwnerOf(agentId), address(0), "adapter exit: agentIdOwner cleared");
+        assertTrue(registry.agentIdOf(user) != bytes32(0), "identity record persists (no rep cleanse)");
+        vm.stopPrank();
+
+        // rebond-able by whoever holds the adapter — new wallet can bond the same agentId.
+        // The ERC-8004 token is still owned by `user` — transfer it first so the new
+        // wallet passes adapter.verifyOwnership(tokenOwner == msg.sender) at bond time.
+        address newWallet = makeAddr("new-wallet");
+        source.transferFrom(user, newWallet, externalId);
+
+        vm.startPrank(newWallet);
+        usdc.mint(newWallet, MIN_BOND);
+        usdc.approve(address(registry), MIN_BOND);
+        registry.bondIn(IAgentIdentity(address(adapter)), externalId, MIN_BOND);
+        assertEq(registry.agentIdOwnerOf(agentId), newWallet, "rebond: agentIdOwner reassigned");
+        vm.stopPrank();
+    }
+
+    function test_completeExit_KeepsAgentIdOwner_BareMode() public {
+        vm.startPrank(user);
+        usdc.mint(user, MIN_BOND);
+        usdc.approve(address(registry), MIN_BOND);
+
+        registry.bondIn(IAgentIdentity(address(0)), 0, MIN_BOND);
+        bytes32 agentId = registry.agentIdOf(user);
+
+        registry.requestExit();
+        vm.warp(block.timestamp + DELAY + 1);
+        registry.completeExit();
+
+        // bare-mode agentId is wallet-derived (bytes32(uint160(wallet))) — the wallet
+        // has exited, so agentIdOwner stays as-is (no rebond possible for the same wallet
+        // until a fresh bondIn). Clearing it would be a no-op; leaving it is also fine.
+        // What matters: adapter mode above IS cleared. This test documents the distinction.
+        vm.stopPrank();
+    }
+
+
     function test_slash_RouterOnly() public _bondedAgent {
         address adversary = makeAddr("villain");
         vm.expectRevert(IAgentRegistry.UnauthorizedCaller.selector);

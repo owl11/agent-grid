@@ -359,6 +359,28 @@ contract JobRouterTest is Test {
 
     // ------------------------------------------------------------ draws (compiled-dark)
 
+    /// @notice accept() must revert with DeadlinePassed when block.timestamp > execDeadline.
+    ///         Also covers canAccept() mirroring the same gate (view must not say yes where
+    ///         accept reverts — see JobHandler invariant pre-check).
+    function test_Accept_RevertsWhenExecDeadlinePassed() public {
+        uint256 jobId = _create(PAYMENT);
+        _bond(executor, MIN_BOND);
+        // jump past the 1-day execDeadline set in _create
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(executor);
+        vm.expectRevert(abi.encodeWithSelector(IJobRouter.DeadlinePassed.selector, jobId));
+        jobRouter.accept(jobId);
+        assertEq(uint8(jobRouter.jobs(jobId).state), uint8(IJobRouter.State.POSTED), "job still posted");
+    }
+
+    function test_CanAccept_ReturnsFalseWhenExecDeadlinePassed() public {
+        uint256 jobId = _create(PAYMENT);
+        _bond(executor, MIN_BOND);
+        vm.warp(block.timestamp + 1 days + 1);
+        assertFalse(jobRouter.canAccept(jobId, executor), "canAccept: false past deadline");
+    }
+
+
     function test_DrawWorkingCapital_DualGate_RevertsInV1() public {
         uint256 jobId = _create(PAYMENT);
         _bond(executor, MIN_BOND);
