@@ -47,7 +47,7 @@ contract PoolHandler is CommonBase, StdUtils {
         address lp = actors[bound(lpIdx, 0, actors.length - 1)];
         amount = bound(amount, 1e6, 5e6); // 1–5 USDC tiny positions
         vm.prank(lp);
-        pool.deposit(amount);
+        pool.deposit(amount, lp);
         ghostDeposits += 1;
         ghostDeposited[lp] += amount;
     }
@@ -57,7 +57,7 @@ contract PoolHandler is CommonBase, StdUtils {
         shares = bound(shares, 0, pool.maxRedeem(lp)); // entry-only pause: exit always live
         if (shares == 0) return;
         vm.prank(lp);
-        uint256 out = pool.withdraw(shares);
+        uint256 out = pool.redeem(shares, lp, lp);
         ghostRedeems += 1;
         ghostRedeemed[lp] += out;
     }

@@ -10,8 +10,6 @@ interface ICapitalPool {
 
     error NotCreditLine();
     error NotJobRouter();
-    /// @notice Withdrawal exceeds the caller's share balance.
-    error InsufficientShares();
     /// @notice Withdrawal exceeds currently free liquidity.
     error InsufficientLiquidity();
     /// @notice `lendTo` called while the pool-side lending gate is OFF.
@@ -25,14 +23,11 @@ interface ICapitalPool {
     error ZeroShares();
 
     // ---------------------------------------------------------------------
-    // Capital providers
+    // Capital providers — the STANDARD ERC-4626 surface (deposit(assets,to),
+    // mint, withdraw(assets,receiver,owner), redeem(shares,to,to), previews).
+    // No custom 1-arg shims: protocol contracts only read/lendTo; LP entry and
+    // exit ride the standard vault ABI.
     // ---------------------------------------------------------------------
-
-    /// @notice Deposit USDC; mints shares pro rata.
-    function deposit(uint256 amount) external returns (uint256 sharesMinted);
-
-    /// @notice Burn shares and receive principal plus pro-rata settlement revenue.
-    function withdraw(uint256 shares) external returns (uint256 amountOut);
 
     // ---------------------------------------------------------------------
     // Credit line interface (authorized caller only)

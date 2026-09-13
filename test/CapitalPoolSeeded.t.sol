@@ -55,7 +55,7 @@ contract CapitalPoolSeededTest is Test {
                 uint256 room = target - depositedOf[i] - (left - 1) * MIN_SLICE;
                 uint256 slice = j == slices - 1 ? room : MIN_SLICE + _rnd(room - MIN_SLICE + 1);
                 vm.prank(lp);
-                pool.deposit(slice);
+                pool.deposit(slice, lp);
                 depositedOf[i] += slice;
             }
 
@@ -125,7 +125,7 @@ contract CapitalPoolSeededTest is Test {
             uint256 wallet0 = usdc.balanceOf(lp);
 
             vm.prank(lp);
-            uint256 out = pool.withdraw(half);
+            uint256 out = pool.redeem(half, lp, lp);
 
             assertEq(out, pool.previewRedeem(half), "P5: payout == previewRedeem, exact");
             // Integer form of payout <= floor(shares*pps), avoiding pps double-floor.
@@ -151,8 +151,8 @@ contract CapitalPoolSeededTest is Test {
             uint256 wallet0 = usdc.balanceOf(lp);
 
             vm.startPrank(lp);
-            uint256 sh = pool.deposit(x);
-            uint256 back = pool.withdraw(sh);
+            uint256 sh = pool.deposit(x, lp);
+            uint256 back = pool.redeem(sh, lp, lp);
             vm.stopPrank();
 
             assertGt(sh, 0, "P6: populated pool never zero-mints");
@@ -176,7 +176,7 @@ contract CapitalPoolSeededTest is Test {
             uint256 maxSh = pool.maxRedeem(lp);
             assertEq(maxSh, pool.balanceOf(lp), "idle pool: liquidity cap == full balance");
             vm.prank(lp);
-            uint256 out = pool.withdraw(maxSh);
+            uint256 out = pool.redeem(maxSh, lp, lp);
 
             assertEq(pool.balanceOf(lp), 0, "full redeem zeroes the LP");
             assertGe(out, depositedOf[i], "revenue only ever added: exit >= deposits");

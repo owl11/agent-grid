@@ -15,6 +15,11 @@ cp -r template/my-job my_job && cd my_job && forge install forge-std
 cd .. && DEMO_FRESH_WALLETS=1 ./script/onboard.sh   # fresh pair, mint + fund + LP
 ```
 
+> The task repo is self-sufficient — `.env.demo.example` already carries the
+> pool + RPC constants, so a user can run jobs from `my_job/` alone without
+> the protocol repo. A root `.env` is an optional dev override (custom
+> deployments, subgraph creds); the demo keys live **only** in `my_job/.env.demo`.
+
 | Role | Pre-demo did | Onchain |
 |---|---|---|
 | **Wallets** | minted + funded the demo originator & agent (keys in `my_job/.env.demo`) | balances |

@@ -5,6 +5,7 @@ import {Test, console, StdAssertions} from "forge-std/Test.sol";
 import "../src/CapitalPool.sol";
 import {MockUSDC} from "./mocks/MockUSDC.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 
 contract CapitalPoolTest is Test {
     CapitalPool pool;
@@ -28,8 +29,8 @@ contract CapitalPoolTest is Test {
         uint256 balance = usdc.balanceOf(user);
         vm.startPrank(user);
         usdc.approve(address(pool), amount);
-        uint256 shares = pool.deposit(amount); // 1e21 shares (1:1e12 offset
-        uint256 amountOut = pool.withdraw(shares); // redeem ALL shares, NOT “amount”
+        uint256 shares = pool.deposit(amount, user); // 1e21 shares (1:1e12 offset
+        uint256 amountOut = pool.redeem(shares, user, user); // redeem ALL shares, NOT “amount”
         vm.stopPrank();
         assertEq(amountOut, amount);
         assertEq(usdc.balanceOf(user), balance);
@@ -38,13 +39,13 @@ contract CapitalPoolTest is Test {
     function testDepositMonotonePps() external {
         vm.startPrank(user_1);
         usdc.approve(address(pool), 1000e6);
-        pool.deposit(1000e6);
+        pool.deposit(1000e6, user_1);
         vm.stopPrank();
         uint256 pps1 = pool.pricePerShare();
 
         vm.startPrank(user_2);
         usdc.approve(address(pool), 2000e6);
-        pool.deposit(2000e6);
+        pool.deposit(2000e6, user_2);
         vm.stopPrank();
         assertGe(pool.pricePerShare(), pps1, "deposit never lowers pps");
 
@@ -60,14 +61,19 @@ contract CapitalPoolTest is Test {
         uint256 balanceBefore = usdc.balanceOf(user);
         vm.startPrank(user);
         usdc.approve(address(pool), depositAmount);
-        uint256 shares = pool.deposit(depositAmount);
+        uint256 shares = pool.deposit(depositAmount, user);
         vm.stopPrank();
 
         uint256 maxShares = pool.maxRedeem(user); // min(balance, liquidity-backed shares)
         assertEq(maxShares, shares, "idle pool: liquidity cap == balance cap");
 
-        vm.expectRevert(ICapitalPool.InsufficientShares.selector);
-        pool.withdraw(maxShares + 1);
+        // standard surface: an over-balance redeem hits OZ's maxRedeem guard.
+        // Full-data match: forge compares expectRevert bytes against the whole
+        // revert payload, so pin owner/shares/max, not just the selector.
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC4626.ERC4626ExceededMaxRedeem.selector, user, maxShares + 1, maxShares)
+        );
+        pool.redeem(maxShares + 1, user, user);
 
         // atomicity: nothing moved on the failed withdraw
         assertEq(usdc.balanceOf(user), balanceBefore - depositAmount, "no USDC left the pool");
@@ -78,7 +84,7 @@ contract CapitalPoolTest is Test {
         uint256 depositAmount = 1 wei; // 1e-6 USDC — the smallest possible deposit
         vm.startPrank(user);
         usdc.approve(address(pool), depositAmount);
-        uint256 shares = pool.deposit(depositAmount);
+        uint256 shares = pool.deposit(depositAmount, user);
         vm.stopPrank();
 
         assertGt(shares, 0, "first deposit can never round to zero");
@@ -96,10 +102,10 @@ contract CapitalPoolTest is Test {
         // victim's FIRST deposit must not zero-round (the inflation attack)
         vm.startPrank(user_2);
         usdc.approve(address(pool), depositAmount);
-        uint256 shares = pool.deposit(depositAmount); // 1e9·1e12/(1e10+1) ≈ 9.09e10
+        uint256 shares = pool.deposit(depositAmount, user_2); // 1e9·1e12/(1e10+1) ≈ 9.09e10
         assertGt(shares, 0, "donation cannot zero out the first deposit");
 
-        uint256 back = pool.withdraw(shares);
+        uint256 back = pool.redeem(shares, user_2, user_2);
         vm.stopPrank();
         assertApproxEqAbs(back, depositAmount, 10, "victim round-trips; donation soaked by ghost shares");
         assertGe(usdc.balanceOf(address(pool)), 10_000e6, "donation never leaves the pool");
@@ -117,11 +123,11 @@ contract CapitalPoolTest is Test {
         assertEq(fresh.totalSupply(), 0, "donation mints nothing (P7)");
         usdc.approve(address(fresh), v);
 
-        uint256 shares = fresh.deposit(v);
+        uint256 shares = fresh.deposit(v, address(this));
         assertEq(shares, 1, "at bound-1 the victim still mints exactly 1 share");
         assertEq(fresh.totalSupply(), 1, "victim's share is the whole real supply");
 
-        uint256 back = fresh.withdraw(shares);
+        uint256 back = fresh.redeem(shares, address(this), address(this));
         assertEq(back, v, "worst non-zeroing donation still round-trips exactly");
         assertEq(fresh.totalSupply(), 0, "supply back to zero");
         assertEq(usdc.balanceOf(address(fresh)), bound - 1, "donation is locked, never leaves");
@@ -133,7 +139,7 @@ contract CapitalPoolTest is Test {
 
         uint256 victimBal = usdc.balanceOf(address(this));
         vm.expectRevert(ICapitalPool.ZeroShares.selector);
-        fresh2.deposit(v);
+        fresh2.deposit(v, address(this));
         assertEq(usdc.balanceOf(address(this)), victimBal, "ZeroShares fires before transferFrom");
         assertEq(fresh2.balanceOf(address(this)), 0, "no shares minted on the reverted deposit");
     }
@@ -141,7 +147,7 @@ contract CapitalPoolTest is Test {
     function testRevenueNotsMint() external {
         vm.startPrank(user_2);
         usdc.approve(address(pool), 1000e6);
-        uint256 shares = pool.deposit(1000e6);
+        uint256 shares = pool.deposit(1000e6, user_2);
         vm.stopPrank();
 
         uint256 supplyBefore = pool.totalSupply();
@@ -158,22 +164,22 @@ contract CapitalPoolTest is Test {
     function testPauseBlocksEntryOnly() external {
         vm.startPrank(user_2);
         usdc.approve(address(pool), 1000e6);
-        uint256 shares = pool.deposit(1000e6);
+        uint256 shares = pool.deposit(1000e6, user_2);
         vm.stopPrank();
 
         pool.pause(); // emergencyOps == test contract (deployer)
 
         vm.prank(user);
         vm.expectRevert(ICapitalPool.Paused.selector);
-        pool.deposit(100e6);
+        pool.deposit(100e6, user);
 
         vm.prank(user_2); // open-exit: existing LP can still leave
-        assertGt(pool.withdraw(shares), 0, "exit stays open while paused");
+        assertGt(pool.redeem(shares, user_2, user_2), 0, "exit stays open while paused");
 
         pool.unpause();
         vm.startPrank(user);
         usdc.approve(address(pool), 1000e6);
-        pool.deposit(100e6); // entry re-enabled
+        pool.deposit(100e6, user); // entry re-enabled
     }
 
     function testPauseCheckBeforeTransfer() external {
@@ -189,7 +195,7 @@ contract CapitalPoolTest is Test {
 
         vm.prank(user_2);
         vm.expectRevert(ICapitalPool.Paused.selector);
-        pool.deposit(amount);
+        pool.deposit(amount, user_2);
 
         assertEq(usdc.balanceOf(user_2), balBefore, "no USDC pulled while paused");
         assertEq(usdc.allowance(user_2, address(pool)), allowBefore, "allowance not consumed");
@@ -201,7 +207,7 @@ contract CapitalPoolTest is Test {
 
         vm.startPrank(user_2);
         usdc.approve(address(pool), 1000e6);
-        pool.deposit(1000e6);
+        pool.deposit(1000e6, user_2);
         vm.stopPrank();
         assertEq(_sumBalances(), s0, "deposit conserves");
 
@@ -212,7 +218,7 @@ contract CapitalPoolTest is Test {
         assertEq(_sumBalances(), s0, "revenue conserves");
 
         vm.startPrank(user_2);
-        pool.withdraw(pool.maxRedeem(user_2));
+        pool.redeem(pool.maxRedeem(user_2), user_2, user_2);
         assertEq(_sumBalances(), s0, "withdraw conserves");
 
         assertEq(pool.totalAssets(), usdc.balanceOf(address(pool)) + pool.outstandingPrincipal());
@@ -222,7 +228,7 @@ contract CapitalPoolTest is Test {
         uint256 depositAmount = 1000e6;
         vm.startPrank(user_2);
         usdc.approve(address(pool), depositAmount);
-        uint256 shares = pool.deposit(depositAmount);
+        uint256 shares = pool.deposit(depositAmount, user_2);
         vm.stopPrank();
 
         vm.startPrank(user);
@@ -230,7 +236,7 @@ contract CapitalPoolTest is Test {
         pool.receiveRevenue(100e6);
         vm.stopPrank();
         vm.prank(user_2);
-        uint256 amtBack = pool.withdraw(shares);
+        uint256 amtBack = pool.redeem(shares, user_2, user_2);
 
         assertGt(amtBack, depositAmount, "revenue flows to LP pro-rata");
         assertEq(pool.balanceOf(user_2), 0, "full redeem zeroes shares");
@@ -245,7 +251,7 @@ contract CapitalPoolTest is Test {
         uint256 depositAmount = 1000e6; // 1000 USDC (6 dp）
         vm.startPrank(user_1);
         usdc.approve(address(pool), depositAmount);
-        uint256 shares = pool.deposit(depositAmount);
+        uint256 shares = pool.deposit(depositAmount, user_1);
         vm.stopPrank();
         _;
     }

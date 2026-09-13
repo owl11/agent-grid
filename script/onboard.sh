@@ -41,7 +41,9 @@
 #                                              #   write them to <repo>/.env.demo,
 #                                              #   print addresses, exit. Never seeds
 #                                              #   keys from the root .env (root .env
-#                                              #   is infra constants only). No tx,
+#                                              #   is an OPTIONAL dev override — the
+#                                              #   script defaults to the deployed
+#                                              #   constants without it). No tx,
 #                                              #   no funding, no deposit.
 #    ./script/onboard.sh --deposit [AMOUNT]    # LP seed ONLY, then stop (funds
 #                                              #   just the LP wallet). Default
@@ -93,22 +95,39 @@ JOBREPO="${DEMO_JOB_REPO:-${PWD}/my_job}"
 DEMO_ENV="$JOBREPO/.env.demo"
 # infra constants needed even by the keys-only path (to write <JOBREPO>/.env.demo)
 RPC="${ARC_TESTNET_RPC_URL:-https://rpc.testnet.arc.io}"
-POOL="${CAPITAL_POOL:?set CAPITAL_POOL in .env}"
+# Deployed pool is a public testnet constant (same value as .env.example /
+# ONBOARDING.md's MCP config) — a fresh machine needs NO root .env for key
+# minting; the demo pair lands only in <JOBREPO>/.env.demo. Root .env stays
+# an optional dev override (custom deployments, subgraph creds).
+POOL="${CAPITAL_POOL:-0x62bb4fEa3e21b45F6A71CCd8bFE763F1ED92E254}"
 
 
-new_key() {   # cast wallet new --json -> bare private key, robust to list/dict
+new_key() {   # cast wallet new --json -> bare private key. Newer foundry (v1.8+)
+              # wraps the payload in an envelope {"data": [...], success, ...};
+              # older versions emit the bare list. Handle both; fail loudly with
+              # the keys we saw on anything else (fresh-machine version skew
+              # should diagnose itself, not die on a bare KeyError).
   cast wallet new --json 2>/dev/null | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
-row=d[0] if isinstance(d,list) else d
-print(row["private_key"])'
+if isinstance(d,dict) and "data" in d:
+    d=d["data"]   # foundry v1.8+ envelope
+row=d[0] if isinstance(d,list) and d else d
+if not isinstance(row,dict):
+    sys.stderr.write("new_key: unrecognized cast wallet JSON (top-level %s) — check foundry version\n" % type(d).__name__)
+    sys.exit(1)
+key=row.get("private_key") or row.get("privateKey")
+if not key:
+    sys.stderr.write("new_key: unrecognized cast wallet JSON (keys=%s) — check foundry version\n" % sorted(row))
+    sys.exit(1)
+print(key)'
 }
 
 # ---- keys-only: mint two fresh demo keys into the task-repo subdir, exit --------
 # The task repo (default ./my_job, override via DEMO_JOB_REPO / JOBREPO) is the
 # only home for the demo pair. The root .env is NEVER used to seed these keys —
-# it is sourced only for infra constants (ORACLE_ADDRESS, pool addresses, RPC,
-# etc.) at the top of this script and by postUpkeep.sh for its own defaults.
+# and is not even required anymore: infra constants (pool/router/registry/RPC)
+# default to the deployed testnet values, so this path works on a bare clone.
 # keys-only creates the target dir if it is missing (with a .gitignore so
 # .env.demo stays gitignored), always mints fresh, writes ORIGINATOR_PRIVATE_KEY
 # + AGENT_PRIVATE_KEY into <JOBREPO>/.env.demo, prints both addresses, and exits.
@@ -142,6 +161,12 @@ GITIGNORE
   exit 0
 fi
 
+# ---- deployed testnet constants (public; override via root .env) ------------
+# Same values as .env.example / ONBOARDING.md's MCP config. Every one defaults
+# to the shared testnet deployment, so a fresh machine runs the script with no
+# root .env at all; the root .env is an OPTIONAL dev override (custom deploys,
+# subgraph creds) — never a source of demo keys (those are minted fresh below
+# into <JOBREPO>/.env.demo).
 USDC="0x3600000000000000000000000000000000000000"
 ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}"
 REGISTRY="${AGENT_REGISTRY:-0x3Df83475b24fAF980E13105550790556B23480a5}"

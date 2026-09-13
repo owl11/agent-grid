@@ -34,27 +34,6 @@ contract CapitalPool is ERC4626, ICapitalPool {
         creditLine = _creditLine;
     }
 
-    /// @notice Locked one-arg entry — ≡ 4626 deposit(amount, msg.sender).
-    /// @notice P6/P8 mandatory as the FIRST guard; P9 mint round-down.
-    /// Locked one-arg shape (backwards compat) = 4626 `deposit(amount, msg.sender)`.
-    /// `totalShares` ≡ ERC20 `_totalSupply` (OZ ERC4626); `Shares[msg.sender]` ≡ `balanceOf`.
-    function deposit(uint256 amount) external override returns (uint256 sharesMinted) {
-        sharesMinted = deposit(amount, msg.sender); // 4626 flow: pause (P8) → preview → pull → mint
-        // emit Deposited(msg.sender, amount, sharesMinted); // legacy event alongside 4626 Deposit
-    }
-
-    /// @notice Locked one-arg exit — ≡ 4626 redeem(shares, msg.sender, msg.sender).
-    /// Shares-IN (not assets); never pause-blocked (entry-only pause).
-    /// NOTE: shadows ERC4626's 3-arg withdraw(assets, receiver, owner) — because we
-    ///       provide a 1-arg 'shares in' API, the inherited 3-arg withdraw/.../... are
-    ///       inaccessible via their selectors (selector collision on 1-arg deposit/withdraw).
-    ///       Composability with tools expecting the standard 3-arg surface is a v2 concern.
-    function withdraw(uint256 shares) external override returns (uint256 amountOut) {
-        if (shares > balanceOf(msg.sender)) revert InsufficientShares();
-        amountOut = redeem(shares, msg.sender, msg.sender); // capped maxRedeem → burn → pay
-        // emit Withdrawn(msg.sender, shares, amountOut); // sharesBurned = shares, NOT pre-burn balance
-    }
-
     /// @notice Pool-side gate of the dual gate. P8 first, then gate, then auth, then cap.
     function lendTo(address to, uint256 amount) external override {
         if (paused) revert Paused(); // P8 — checked FIRST

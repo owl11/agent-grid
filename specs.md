@@ -94,6 +94,7 @@ Lends exclusively to `CreditLine`. LP return in v1 is settlement revenue via `re
 **Key decisions:**
 - `bookedAssets` is **derived**, not stored (`usdc.balanceOf(this)` — G1). No second counter to drift from reality.
 - ERC-4626 surface adopted day-1: `totalShares ≡ totalSupply()`, dead-share guard prevents inflation attacks.
+- LP entry/exit rides the **standard ERC-4626 surface** — `deposit(assets, to)` / `withdraw(assets, receiver, owner)` / `redeem(shares, to, to)` — no custom 1-arg shims; entry-only pause is enforced in the `_deposit` hook.
 - `reportLoss` lands same-block in share price (visible, not hidden). Loss socialization only at v2-unsecured stages.
 - Dual-gate defense-in-depth: `lendTo` requires both `lendEnabled` (pool) AND `lendingEnabled` (CreditLine). Pause-entry/open-exit: outstanding debt can always wind down.
 
