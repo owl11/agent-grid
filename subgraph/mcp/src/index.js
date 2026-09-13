@@ -25,6 +25,7 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { loadLocalSpecs, readSpecFile } from "./specs.js";
+import { tierOf } from "./reputation.js";
 
 // Dotenv comes first so the consts below (RPC_URL, SUBGRAPH_URL, addresses)
 // can default from the demo env files instead of a hardcoded RPC. A job-test
@@ -307,19 +308,9 @@ server.tool(
 
 // reasoning (computed over indexed data)
 
-// AgentRegistry.sol:18 — $100k USDC cap for volume factor. Env-overridable
-// so a redeploy with a new cap doesn't need a code change here.
-const VOL_CAP = BigInt(process.env.VOL_CAP ?? "100000000000");
-const E18 = 10n ** 18n;
-
-function tierOf(score, volume) {
-  const vf = (volume > VOL_CAP ? VOL_CAP : volume) * E18 / VOL_CAP;
-  const s = score * vf / E18; // == repScore: ewma x volumeFactor (registry repScore)
-  const tier = (s >= 9n * 10n ** 17n && vf >= 75n * 10n ** 16n) ? 3
-    : s >= 75n * 10n ** 16n ? 2
-    : s >= 5n * 10n ** 17n ? 1 : 0;
-  return { score: s.toString(), volumeFactor: vf.toString(), tier };
-}
+// tierOf() lives in ./reputation.js — bit-for-bit mirror of AgentRegistry
+// repScore()/tier(), including the den == 0 → flat DEFAULT_REP early return
+// (fresh agents are tier 1 onchain; the old inline copy collapsed them to 0).
 
 server.tool(
   "agent_leaderboard",
@@ -330,7 +321,12 @@ server.tool(
       id wallet bond success failure neutral fraud volume jobsAssigned jobsCompleted
       score acceptLatencyTotal submitLatencyTotal settleLatencyTotal debtLocked } }`);
     const rows = data.agents.map((a) => {
-      const t = tierOf(BigInt(a.score), BigInt(a.volume));
+      // hasOutcomes == den != 0 onchain: any non-NEUTRAL outcome ever recorded
+      // (NEUTRAL is weight-zero). den == 0 → registry returns DEFAULT_REP flat.
+      const t = tierOf(
+        BigInt(a.score), BigInt(a.volume),
+        BigInt(a.success) + BigInt(a.failure) + BigInt(a.fraud) > 0n,
+      );
       const done = a.jobsCompleted > 0;
       return {
         id: a.id, wallet: a.wallet, bond: a.bond, debtLocked: a.debtLocked,
