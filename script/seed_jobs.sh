@@ -22,8 +22,14 @@ set -euo pipefail
 if [ -f ".env" ]; then
   set -a; source .env; set +a
 fi
+# Demo mode (onboard.sh): demo originator posts the market-color escrow.
+if [ -f ".env.demo" ] && [ "${AGENTGRID_DEMO_KEYS:-0}" = "1" ]; then
+  set -a; source .env.demo; set +a
+fi
 
 RPC="${ARC_TESTNET_RPC_URL:-https://rpc.testnet.arc.io}"
+EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
+export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"   # full receipts land here, never stdout
 USDC="0x3600000000000000000000000000000000000000"   # Arc native USDC ERC-20 view (6 dp)
 # Pinned to the canonical deployment — override via env after a redeploy.
 ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}" # canonical JobRouter (redeploy #4)
@@ -75,37 +81,48 @@ echo
 
 # ---- 1) approve total escrow USDC to JobRouter (only if fresh run) ----------
 if (( START == 1 )); then
-  echo ">> approve($ROUTER, $TOTAL_ATOMIC) [nonce $NEXT_NONCE]"
-  cast send "$USDC" \
+  # AWAIT the approve (no --async): createJob's gas-estimate must see the
+  # allowance already on-chain, else it reverts ERC20: transfer amount exceeds
+  # allowance the instant the RPC estimates before the approve mines.
+  out="$(cast send "$USDC" \
     "approve(address,uint256)(bool)" \
     "$ROUTER" "$TOTAL_ATOMIC" \
-    --rpc-url "$RPC" --private-key "$PK" --nonce "$NEXT_NONCE" --async || exit 1
+    --rpc-url "$RPC" --private-key "$PK" --nonce "$NEXT_NONCE" --timeout 120 2>&1)" || {
+    printf '%s\n' "$out" >> "$TECH_LOG"
+    echo "   ✗ originator · escrow approve — tx failed, full receipt in $TECH_LOG. Re-run after checking it." >&2
+    exit 1
+  }
+  printf '%s\n' "$out" >> "$TECH_LOG"
+  hash="$(awk '/^transactionHash/{print $2}' <<< "$out")"
+  echo "   ✓ originator · escrow approve $(( TOTAL_ATOMIC / 1000000 )) USDC  $EXPLORER/tx/$hash"
   NEXT_NONCE=$((NEXT_NONCE + 1))
-  echo ">> approve sent."
 else
   echo ">> resume mode — skipping approve (allowance already granted)"
 fi
 
 # ---- 2) create COUNT open-post jobs (from START) ----------------------------
+BASE_JOB="$(cast call "$ROUTER" 'jobCount()(uint256)' --rpc-url "$RPC" | awk '{print $1}')"
 for (( i=START; i<=COUNT; i++ )); do
+  JOB_ID=$(( BASE_JOB + i - START + 1 ))
   # deterministic per-job specHash (on-chain provenance string)
   SPEC=$(printf 'seed-job-%d' "$i")
   SPECHASH=$(cast keccak "$SPEC")
-  echo ">> createJob(#$i, ${SPECHASH:0:18}…, open, ops=0) [nonce $NEXT_NONCE]"
-  cast send "$ROUTER" \
+  HASH="$(cast send "$ROUTER" \
     "createJob(uint128,bytes32,(uint16,uint16,uint16),uint64,uint64,address,uint96)(uint256)" \
     "$PAYMENT_ATOMIC" "$SPECHASH" "$SPLIT" \
     "$EXEC_DEADLINE" "$APPROVAL_WINDOW" \
     "0x0000000000000000000000000000000000000000" \
     "0" \
-    --rpc-url "$RPC" --private-key "$PK" --nonce "$NEXT_NONCE" --async || { echo "job $i failed at nonce $NEXT_NONCE"; exit 1; }
+    --rpc-url "$RPC" --private-key "$PK" --nonce "$NEXT_NONCE" --async 2>/dev/null)" || {
+      printf 'createJob #%s failed at nonce %s\n' "$i" "$NEXT_NONCE" >> "$TECH_LOG"
+      echo "   ✗ originator · post job #$i failed at nonce $NEXT_NONCE — see $TECH_LOG" >&2
+      exit 1
+    }
+  echo "   ✓ originator · post job #${JOB_ID}  $EXPLORER/tx/${HASH}"
   NEXT_NONCE=$((NEXT_NONCE + 1))
   sleep 0.3   # keep a beat between async sends (some RPCs enqueue, some 429)
 done
 
 echo
-echo "=== done — jobs $START..$COUNT queued (${COUNT} total requested)."
-echo "Verify with:"
-echo "  cast call $ROUTER 'jobCount()(uint256)' --rpc-url $RPC"
-echo "  cast call $USDC 'balanceOf(address)(uint256)' $ROUTER --rpc-url $RPC"
-echo "The subgraph indexes them within ~30s; front-end badge flips to LIVE."
+echo "=== ${COUNT} job(s) queued — subgraph indexes them within ~30s ==="
+echo "Explorer: $EXPLORER   (click any tx hash above)"

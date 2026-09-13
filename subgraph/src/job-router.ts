@@ -8,6 +8,7 @@ import {
   JobSettled,
   JobCancelled,
   JobExpired,
+  JobRejected,
   TimeoutSettled,
   DisputeOpened,
   DisputeResolved,
@@ -145,6 +146,12 @@ export function handleJobExpired(event: JobExpired): void {
   j.outcome = "FAILURE";
   touch(j, event.block.timestamp);
   logEvent(event.params.jobId, "Expired", event.block.timestamp, event.transaction.hash);
+}
+
+export function handleJobRejected(event: JobRejected): void {
+  // Reject fires immediately before JobExpired in the same tx — audit row only;
+  // the terminal disposition (EXPIRED / FAILURE) lands in handleJobExpired.
+  logEvent(event.params.jobId, "Rejected", event.block.timestamp, event.transaction.hash);
 }
 
 export function handleTimeoutSettled(event: TimeoutSettled): void {

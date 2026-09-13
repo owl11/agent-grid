@@ -314,6 +314,49 @@ contract JobRouterTest is Test {
         assertEq(uint8(jobRouter.jobs(jobId).state), uint8(IJobRouter.State.EXPIRED));
     }
 
+    // ------------------------------------------------------------ reject (originator terminal)
+
+    function test_Reject_SplitsEscrowToRefundExecutorPoolTreasury() public {
+        uint256 jobId = _create(PAYMENT);
+        _bond(executor, MIN_BOND);
+        vm.warp(block.timestamp + 20 minutes + 1);
+        _accept(jobId, executor);
+        _submit(jobId);
+
+        vm.expectEmit(address(jobRouter));
+        emit IJobRouter.JobRejected(jobId, bytes32("bad-result"));
+        vm.prank(originator);
+        jobRouter.reject(jobId, bytes32("bad-result"));
+
+        // 90% refund / 5% executor / 2.5% pool /
+        // 2.5% hardcoded reject treasury (REJECT_TREASURY, NOT router.treasury).
+        assertEq(usdc.balanceOf(originator), originatorBaseline - PAYMENT + 90e6, "originator 90% refund");
+        assertEq(usdc.balanceOf(executor), 5e6, "executor 5%");
+        assertEq(usdc.balanceOf(address(pool)) - poolBaseline, 2_500_000, "pool 2.5%");
+        assertEq(usdc.balanceOf(jobRouter.REJECT_TREASURY()), 2_500_000, "reject treasury 2.5%");
+        assertEq(usdc.balanceOf(address(jobRouter)), 0, "router must NEVER retain escrow");
+        assertEq(registry.bondOf(executor), MIN_BOND, "bond untouched (no slash in demo)");
+        assertLt(registry.repScore(executor), 0.5e18, "FAILURE drags score");
+        assertEq(uint8(jobRouter.jobs(jobId).state), uint8(IJobRouter.State.EXPIRED));
+    }
+
+    function test_Reject_GatedToOriginatorAndWindow() public {
+        uint256 jobId = _create(PAYMENT);
+        _bond(executor, MIN_BOND);
+        vm.warp(block.timestamp + 20 minutes + 1);
+        _accept(jobId, executor);
+        _submit(jobId);
+
+        vm.prank(executor); // not the originator
+        vm.expectRevert(abi.encodeWithSelector(IJobRouter.NotOriginator.selector, jobId));
+        jobRouter.reject(jobId, bytes32("x"));
+
+        vm.warp(block.timestamp + APPROVAL_WINDOW + 1); // window closed → reject no longer possible
+        vm.prank(originator);
+        vm.expectRevert(abi.encodeWithSelector(IJobRouter.ApprovalWindowOpen.selector, jobId));
+        jobRouter.reject(jobId, bytes32("x"));
+    }
+
     // ------------------------------------------------------------ draws (compiled-dark)
 
     function test_DrawWorkingCapital_DualGate_RevertsInV1() public {

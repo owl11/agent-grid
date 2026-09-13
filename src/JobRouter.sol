@@ -27,6 +27,14 @@ contract JobRouter is IJobRouter {
     uint128 public maxPayment = 5_000e6; // hard ≤ 50_000e6
     uint16 public splitFloorBps = 2000; // [500, 3000]
 
+    // Reject terminal allocation (no arbitration): the entire escrow moves out —
+    // 90% refunded to the originator, 5% to the executor, 2.5% to the pool
+    // (LP yield), 2.5% to the fixed reject treasury address.
+    uint16 public constant REJECT_EXECUTOR_BPS = 500; // 5% → assigned agent
+    uint16 public constant REJECT_POOL_BPS = 250; // 2.5% → pool receiveRevenue
+    uint16 public constant REJECT_TREASURY_BPS = 250; // 2.5% → fixed treasury
+    address public constant REJECT_TREASURY = 0xD7A0872986033343346dDc6cB86f4b6116e25049;
+
     // constants — happy-path only. The dispute/mutual-cancel/slash tables
     // (FREE_WINDOW, DISPUTE_WINDOW, OOPS_*/AF_*/OF_*) are POSTPONED with the lending
     // layer: lending is dual-gate OFF in the demo, so there is nothing to slash,
@@ -188,11 +196,32 @@ contract JobRouter is IJobRouter {
         _settleSuccess(jobId);
     }
 
-    /// @notice POSTPONED for the demo — disputes are deferred with the lending layer
-    ///         (no loans ⇒ no borrowed funds to resolve ⇒ no dispute path). Restored
-    ///         in the lending-era (testnet) build.
-    function reject(uint256, bytes32) external pure {
-        revert();
+    /// @notice Originator rejects the submitted result during the approval window.
+    ///         Terminal disposition: escrow split 90% refund to the originator /
+    ///         5% to the executor / 2.5% to the pool (LP yield) / 2.5% to the
+    ///         fixed reject treasury; FAILURE recorded. Gated to the originator.
+    /// @param reasonHash Content hash of the originator's offchain reason.
+    function reject(uint256 jobId, bytes32 reasonHash) external {
+        Job storage j = _fetch(jobId);
+        if (msg.sender != j.originator) revert NotOriginator(jobId);
+        if (j.state != State.SUBMITTED) revert InvalidState(jobId, j.state);
+        if (block.timestamp > j.approvalDeadline) revert ApprovalWindowOpen(jobId);
+
+        address wallet = _agentWallet(jobId);
+        uint256 executor = _bps(j.payment, REJECT_EXECUTOR_BPS);
+        uint256 poolSlice = _bps(j.payment, REJECT_POOL_BPS);
+        uint256 treasurySlice = _bps(j.payment, REJECT_TREASURY_BPS);
+        uint256 refund = j.payment - executor - poolSlice - treasurySlice; // 90%
+
+        if (executor > 0) token.safeTransfer(wallet, executor);
+        if (treasurySlice > 0) token.safeTransfer(REJECT_TREASURY, treasurySlice);
+        if (poolSlice > 0) _poolSlice(poolSlice); // transfer-in + receiveRevenue (LP yield)
+        token.safeTransfer(j.originator, refund);
+
+        _recordOutcome(jobId, wallet, IAgentRegistry.Outcome.FAILURE, j.payment);
+        j.state = State.EXPIRED; // terminal — same disposition as a missed deadline
+        emit JobRejected(jobId, reasonHash); // cause event
+        emit JobExpired(jobId, refund, 0); // disposition (drives the indexed state)
     }
 
     /// @notice Auto-settle in the agent's favor after the originator's approval

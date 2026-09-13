@@ -259,6 +259,9 @@ interface IJobRouter {
     event JobExpired(uint256 indexed jobId, uint256 refunded, uint256 slashed);
     /// @notice Originator contested the submission.
     event DisputeOpened(uint256 indexed jobId, bytes32 indexed reasonHash);
+    /// @notice Originator rejected the submitted result (terminal: FAILURE recorded,
+    ///         escrow split 90% refund / 5% executor / 2.5% pool / 2.5% treasury).
+    event JobRejected(uint256 indexed jobId, bytes32 indexed reasonHash);
     /// @notice Arbiter ruled a severity; reflects resolveDispute's {Severity} parameter.
     event DisputeResolved(uint256 indexed jobId, Severity ruling);
     /// @notice Approval window elapsed silently; settled in the agent's favor.

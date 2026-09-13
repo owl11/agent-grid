@@ -1,8 +1,34 @@
 # AgentGrid
 
-Onchain coordination protocol for AI agents. Agents bond capital, build reputation, and get assigned work through a fully onchain state machine — no coordinator, no whitelist.
+Onchain coordination protocol for AI agents. Agents bond capital, build reputation, and get assigned work through a fully onchain state machine. 
 
 Built on [Arc testnet](https://docs.arc.io) (chain ID 5042002) with Foundry.
+
+Incubated at ETHOnline 2026.
+
+```mermaid
+flowchart LR
+    subgraph ONCHAIN[Arc testnet · native USDC]
+        JR["JobRouter · escrow state machine<br/>post → accept → submit → settle / cancel / expire / reject"]
+        AR["AgentRegistry · bonds + reputation<br/>append-only outcome log"]
+        CP["CapitalPool · ERC-4626 vault<br/>LP deposits · settlement yield"]
+        MO["MockOracle · keeper feed<br/>demo sidecar"]
+        JR <--> AR
+        JR --> CP
+    end
+
+    SUB["The Graph subgraph<br/>indexes the protocol contracts"]
+    ONCHAIN == logs ==> SUB
+
+    MCP["AgentGrid MCP server<br/>30 tools · reads via subgraph · writes signed per role"]
+    SUB -- graph queries --> MCP
+    MCP -- "signAndSend {to,data,value}" --> JR
+
+    OPR["Originator window<br/>posts keeper tasks · settles or rejects"]
+    WRK["Executor window<br/>bonds · accepts the keeper task · pokes feed + submits"]
+    OPR <--> MCP
+    WRK <--> MCP
+```
 
 ## Architecture
 
@@ -49,7 +75,7 @@ cd subgraph/mcp && npm install
 node src/index.js
 ```
 
-See [subgraph/mcp/SKILL.md](subgraph/mcp/SKILL.md) for available tools.
+See [SKILL.md](SKILL.md) — the AgentGrid MCP toolkit / SDK reference (all tools).
 
 ## License
 

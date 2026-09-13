@@ -32,11 +32,20 @@
 #  NEEDS (full): deployer funded (escrow + gas), agent funded (bond + gas).
 #  NEEDS (agent-only): agent funded (bond + gas).
 #  Faucet: https://faucet.circle.com
+#
+#  ORACLE (optional): with ORACLE_ADDRESS set, the agent really pokes the mock
+#    lending-pool feed (poke(tx) -> lastUpdated) and commits
+#    keccak(txHash, postUpdateTimestamp); unset, it submits a synthetic hash
+#    so any generic job still runs end-to-end.
 # =============================================================================
 set -euo pipefail
 
 if [ -f ".env" ]; then
   set -a; source .env; set +a
+fi
+# Demo mode (onboard.sh): demo wallets override the canonical originator/agent.
+if [ -f ".env.demo" ] && [ "${AGENTGRID_DEMO_KEYS:-0}" = "1" ]; then
+  set -a; source .env.demo; set +a
 fi
 
 MODE="full"; JOB_ID=""
@@ -54,6 +63,8 @@ USDC="0x3600000000000000000000000000000000000000"
 ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}"
 REGISTRY="${AGENT_REGISTRY:-0x3Df83475b24fAF980E13105550790556B23480a5}"
 POOL="${CAPITAL_POOL:?set CAPITAL_POOL (canonical pool) — jobs must never settle into an unseeded pool}"
+EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
+export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"   # full receipts land here, never stdout
 ORIG_PK=""; ORIGIN=""; ONONCE=0
 AGENT_PK="${AGENT_PRIVATE_KEY:?set AGENT_PRIVATE_KEY in .env}"
 if [[ "$MODE" == "full" ]]; then
@@ -113,9 +124,58 @@ echo "  bond       : ${BOND_USDC} USDC"
 echo
 fi
 
-send() { # send <key> <nonce-var> <to> <sig> [args...] — sync, waits for receipt
-  local key="$1"; shift
-  cast send "$@" --rpc-url "$RPC" --private-key "$key" --timeout 120 || exit 1
+send() { # send <role·action> <key> <to> <sig> [args...] — one labelled ✓ line
+  local label="$1"; local key="$2"; shift 2
+  local out hash
+  out="$(cast send "$@" --rpc-url "$RPC" --private-key "$key" --timeout 120 2>&1)" || {
+    printf '%s\n' "$out" >> "$TECH_LOG"
+    echo "   ✗ $label — transaction failed, full receipt in $TECH_LOG. Re-run after checking it." >&2
+    exit 1
+  }
+  printf '%s\n' "$out" >> "$TECH_LOG"
+  hash="$(awk '/^transactionHash/{print $2}' <<< "$out")"
+  echo "   ✓ $label  $EXPLORER/tx/$hash"
+}
+
+# Mock lending-pool BTC feed (specs/4.json). Optional: when set, the agent
+# really pokes the feed and commits the real poke tx.
+ORACLE="${ORACLE_ADDRESS:-}"
+POKE_VALUE="${ORACLE_POKE_VALUE:-420000}"
+
+# Poke the oracle as the assigned agent and commit: RESULT = keccak256(
+# "<pokeTxHash>:<postUpdateTimestamp>"). Generic jobs (no oracle set) fall
+# back to a synthetic hash so the lifecycle still runs end-to-end.
+post_result() { # <label>
+  local label="$1" poke_tx post_ts out
+  if [[ -n "$ORACLE" ]]; then
+    out="$(cast send "$ORACLE" "poke(uint256)" "$POKE_VALUE" --rpc-url "$RPC" --private-key "$AGENT_PK" --nonce "$ANONCE" --timeout 120 --json 2>&1)" || {
+      printf '%s\n' "$out" >> "$TECH_LOG"
+      echo "   ✗ poke failed — full receipt in $TECH_LOG." >&2
+      exit 1
+    }
+    printf '%s\n' "$out" >> "$TECH_LOG"
+    poke_tx="$(sed -nE 's/.*"(transactionHash|hash)":"(0x[0-9a-fA-F]+)".*/\2/p' <<< "$out" | head -1)"
+    ANONCE=$((ANONCE + 1))   # the poke consumed the agent nonce we tracked
+    [[ -n "$poke_tx" ]] || { echo "FATAL: could not parse poke tx hash from cast send" >&2; exit 1; }
+    post_ts="$(cast call "$ORACLE" 'lastUpdated()(uint256)' --rpc-url "$RPC" | awk '{print $1}')"
+    RESULT="$(cast keccak "${poke_tx#0x}:${post_ts}")"   # strip 0x so cast treats it as ASCII
+    echo "   ✓ agent · poke feed (${POKE_VALUE}) — feed now ${post_ts}  $EXPLORER/tx/$poke_tx"
+  else
+    RESULT="$(cast keccak "keeper-demo-result-${label}")"
+    echo ">> [agent] ORACLE_ADDRESS unset — synthetic result"
+  fi
+}
+
+# Feed-age stamp for oracle-poke runs (no-op without ORACLE_ADDRESS).
+feed_status() {
+  local last now age fresh
+  if [[ -n "$ORACLE" ]]; then
+    last="$(cast call "$ORACLE" 'lastUpdated()(uint256)' --rpc-url "$RPC" | awk '{print $1}')"
+    now="$(date +%s)"
+    age=$(( now - last ))
+    if (( age <= 3600 )); then fresh="fresh"; else fresh="STALE"; fi
+    echo "   feed ${ORACLE:0:10}… : lastUpdated ${last} (age ${age}s, threshold 3600s) → ${fresh}"
+  fi
 }
 
 echo ">> [agent] bond check"
@@ -136,14 +196,11 @@ if (( EXISTING_BOND >= BOND_ATOMIC )); then
   echo "   already bonded — skipping approve + bondIn (bondIn reverts AlreadyBonded)."
 else
   DELTA=$(( BOND_ATOMIC - EXISTING_BOND ))
-  echo ">> [agent] approve registry ${DELTA}"
-  send "$AGENT_PK" "$USDC" "approve(address,uint256)(bool)" "$REGISTRY" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+  send "agent · approve registry" "$AGENT_PK" "$USDC" "approve(address,uint256)(bool)" "$REGISTRY" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
   if (( EXISTING_BOND == 0 )); then
-    echo ">> [agent] bondIn(${ADAPTER}, ${EXT_ID}, ${DELTA})"
-    send "$AGENT_PK" "$REGISTRY" "bondIn(address,uint256,uint256)" "$ADAPTER" "$EXT_ID" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+    send "agent · bond (post ${DELTA} USDC)" "$AGENT_PK" "$REGISTRY" "bondIn(address,uint256,uint256)" "$ADAPTER" "$EXT_ID" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
   else
-    echo ">> [agent] addBond(${DELTA}) — topping up to ${BOND_USDC}"
-    send "$AGENT_PK" "$REGISTRY" "addBond(uint256)" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+    send "agent · addBond (top up ${DELTA} USDC)" "$AGENT_PK" "$REGISTRY" "addBond(uint256)" "$DELTA" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
   fi
 fi
 
@@ -158,23 +215,20 @@ if [[ "$MODE" == "agent" ]]; then
     echo "its payment, or the agent is ineligible (pending exit / debt lock)." >&2
     exit 1
   fi
-  echo ">> [agent] accept(${JOB_ID}) — gate open"
-  send "$AGENT_PK" "$ROUTER" "accept(uint256)" "$JOB_ID" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+  echo "   canAccept(#${JOB_ID}, agent) = true — gate open"
+  send "agent · accept #${JOB_ID}" "$AGENT_PK" "$ROUTER" "accept(uint256)" "$JOB_ID" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
 
-  RESULT="$(cast keccak "keeper-demo-result-${JOB_ID}")"
-  echo ">> [agent] submitResult(${JOB_ID}, ${RESULT:0:18}…)"
-  send "$AGENT_PK" "$ROUTER" "submitResult(uint256,bytes32)" "$JOB_ID" "$RESULT" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+  post_result "$JOB_ID"
+  send "agent · submit #${JOB_ID}" "$AGENT_PK" "$ROUTER" "submitResult(uint256,bytes32)" "$JOB_ID" "$RESULT" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
 
+  feed_status
   echo
   echo "=== submitted job #${JOB_ID} — approval stays with the originator ==="
   echo "It settles on approve, or anyone can timeout-settle after the approval window."
-  echo "Watch it index (~30s):"
-  echo "  SUBGRAPH_URL=\"https://api.studio.thegraph.com/query/1758789/job-router/0.0.5\" \\"
-  echo "    node -e 'fetch(process.env.SUBGRAPH_URL,{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({query:\"{ job(id: \\\"${JOB_ID}\\\") { state outcome assignedWallet resultHash submittedAt } }\"})}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j.data.job)))'"
+  echo "Subgraph index: http://explorer.testnet.arc.io  (all txs above are live on Arc)"
   exit 0
 fi
 
-echo ">> [origin] approve router ${PAYMENT_ATOMIC}"
 # Genesis guard (full mode posts): refuse if the pool has no shares — revenue
 # settling into an empty pool imprints a distorted genesis price permanently.
 # Run ./script/seed_pool.sh first.
@@ -184,27 +238,22 @@ if (( SUPPLY == 0 )); then
   echo "  CAPITAL_POOL=$POOL ./script/seed_pool.sh 10" >&2
   exit 1
 fi
-send "$ORIG_PK" "$USDC" "approve(address,uint256)(bool)" "$ROUTER" "$PAYMENT_ATOMIC" --nonce "$ONONCE"; ONONCE=$((ONONCE + 1))
+send "originator · approve router (${PAYMENT_USDC} USDC escrow)" "$ORIG_PK" "$USDC" "approve(address,uint256)(bool)" "$ROUTER" "$PAYMENT_ATOMIC" --nonce "$ONONCE"; ONONCE=$((ONONCE + 1))
 
-echo ">> [origin] createJob(#${NEXT_ID}, direct hire)"
-send "$ORIG_PK" "$ROUTER" \
+send "originator · direct-hire #${NEXT_ID}" "$ORIG_PK" "$ROUTER" \
   "createJob(uint128,bytes32,(uint16,uint16,uint16),uint64,uint64,address,uint96)(uint256)" \
   "$PAYMENT_ATOMIC" "$SPECHASH" "$SPLIT" \
   "$EXEC_DEADLINE" "$APPROVAL_WINDOW" "$AGENT" "0" \
   --nonce "$ONONCE"; ONONCE=$((ONONCE + 1))
 
-echo ">> [agent] accept(${NEXT_ID})"
-send "$AGENT_PK" "$ROUTER" "accept(uint256)" "$NEXT_ID" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+send "agent · accept #${NEXT_ID}" "$AGENT_PK" "$ROUTER" "accept(uint256)" "$NEXT_ID" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
 
-RESULT="$(cast keccak "keeper-demo-result-${NEXT_ID}")"
-echo ">> [agent] submitResult(${NEXT_ID}, ${RESULT:0:18}…)"
-send "$AGENT_PK" "$ROUTER" "submitResult(uint256,bytes32)" "$NEXT_ID" "$RESULT" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
+post_result "$NEXT_ID"
+send "agent · submit #${NEXT_ID}" "$AGENT_PK" "$ROUTER" "submitResult(uint256,bytes32)" "$NEXT_ID" "$RESULT" --nonce "$ANONCE"; ANONCE=$((ANONCE + 1))
 
-echo ">> [origin] approve(${NEXT_ID}) — settles 9000/500/500"
-send "$ORIG_PK" "$ROUTER" "approve(uint256)" "$NEXT_ID" --nonce "$ONONCE"; ONONCE=$((ONONCE + 1))
+send "originator · approve #${NEXT_ID} (settles 9000/500/500)" "$ORIG_PK" "$ROUTER" "approve(uint256)" "$NEXT_ID" --nonce "$ONONCE"; ONONCE=$((ONONCE + 1))
 
+feed_status
 echo
-echo "=== settled job #${NEXT_ID} — subgraph indexes within ~30s ==="
-echo "Verify with:"
-echo "  SUBGRAPH_URL=\"https://api.studio.thegraph.com/query/1758789/job-router/0.0.3\" \\"
-  echo "    node -e 'fetch(process.env.SUBGRAPH_URL,{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({query:\"{ job(id: \\\"${NEXT_ID}\\\") { state outcome executorPaid lpPaid treasuryPaid submittedAt settledAt } }\"})}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j.data.job)))'"
+echo "=== job #${NEXT_ID} is SETTLED — the subgraph indexes it within ~30s ==="
+echo "Every tx above is live on Arc: $EXPLORER"

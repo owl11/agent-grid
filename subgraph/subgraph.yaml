@@ -39,6 +39,8 @@ dataSources:
           handler: handleJobCancelled
         - event: JobExpired(indexed uint256,uint256,uint256)
           handler: handleJobExpired
+        - event: JobRejected(indexed uint256,indexed bytes32)
+          handler: handleJobRejected
         - event: TimeoutSettled(indexed uint256)
           handler: handleTimeoutSettled
         - event: DisputeOpened(indexed uint256,indexed bytes32)

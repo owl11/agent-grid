@@ -1,32 +1,33 @@
 {
-  "title": "Poke stale price feed back within tolerance",
-  "description": "Monitor the target price feed and submit an update transaction whenever its latest round is older than the staleness threshold. One accepted job covers one poke: check staleness, send the update, submit the tx hash as the result.",
+  "title": "Keep the lending-pool BTC price feed fresh (mock oracle)",
+  "description": "A demo lending pool prices BTC-denominated collateral through a mock onchain oracle. A stale feed (oldest round older than the staleness threshold) would break liquidations, so the pool pays keepers to poke the feed back within tolerance. One accepted job covers one poke: check staleness, send the update, submit the poke tx hash as the result.",
   "requirements": [
-    "Funded self-custody wallet for gas on the target chain",
-    "Ability to read the feed's latest round timestamp",
-    "Access to a price source accepted by the feed's updater"
+    "Funded self-custody wallet for gas on Arc testnet (native USDC gas)",
+    "Ability to read the feed's latest round timestamp onchain",
+    "Pointer to the price source the feed's updater uses (here: the mock oracle's own latestValue)"
   ],
   "deliverables": [
-    "Onchain update transaction bringing the feed within tolerance",
+    "Onchain poke transaction bringing the feed within tolerance",
     "Result submitted as keccak(txHash, postUpdateTimestamp)"
   ],
-  "payment": "25 USDC",
+  "payment": "2 USDC",
   "deadline": "2026-09-18",
-  "context": "Long-tail feeds have no official keeper. The originator escrows a flat fee per poke; the agent spends its own gas and keeps the spread. Stale reads downstream break settlement pricing, so freshness is objectively verifiable and needs no human judge.",
+  "context": "Oracle feeds are the classic long-tail keeper job: fresh reads are objectively verifiable on chain and need no human judge. This spec is a MOCK — a plain mock oracle stands in for a real lending-pool price feed (Arc testnet has no Chainlink; a Binance-API feed is not onchain-verifiable). The frontier is real verification (e.g. an external verification layer); the point here is the coordinated lifecycle: escrow, bond, accept, poke, submit, settle.",
   "verification": {
     "type": "oracle-poke",
     "chainId": 5042002,
-    "contract": "0x0000000000000000000000000000000000000000",
-    "method": "update()",
+    "contract": "0x24F74B5B4a613d38E4926c9E54C1162ec4a840A0",
+    "method": "poke(uint256)",
     "params": {
       "stalenessThresholdSec": 3600,
-      "note": "Originator replaces contract/method with the real feed before posting"
+      "note": "Mock BTC/USD lending-pool feed. Live on arcscan: https://testnet.arcscan.app/address/0x24F74B5B4a613d38E4926c9E54C1162ec4a840A0"
     },
     "asserts": [
-      "feed latest round timestamp is after the poke transaction",
-      "latest round timestamp is within stalenessThresholdSec of head block time",
+      "feed lastUpdated is after the poke transaction",
+      "feed lastUpdated is within stalenessThresholdSec of head block time",
       "poke transaction sender equals the assigned agent wallet"
     ],
     "resultCommitment": "keccak(txHash, postUpdateTimestamp)"
-  }
+  },
+  "result": "standard"
 }

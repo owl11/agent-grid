@@ -12,6 +12,10 @@ docs/
 .env
 .env.*
 !.env.example
+!.env.demo.example
+
+# Materialized job-test repo (template copy — holds the demo keys)
+my_job/
 
 # Node
 node_modules/
