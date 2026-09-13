@@ -380,7 +380,6 @@ contract JobRouterTest is Test {
         assertFalse(jobRouter.canAccept(jobId, executor), "canAccept: false past deadline");
     }
 
-
     function test_DrawWorkingCapital_DualGate_RevertsInV1() public {
         uint256 jobId = _create(PAYMENT);
         _bond(executor, MIN_BOND);

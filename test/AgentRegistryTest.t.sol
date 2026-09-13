@@ -169,7 +169,6 @@ contract AgentRegistryTest is Test {
         vm.stopPrank();
     }
 
-
     function test_slash_RouterOnly() public _bondedAgent {
         address adversary = makeAddr("villain");
         vm.expectRevert(IAgentRegistry.UnauthorizedCaller.selector);
