@@ -20,6 +20,10 @@ import {JobRouter} from "../src/JobRouter.sol";
 ///                --rpc-url arc_testnet --broadcast --verify
 ///         Arc testnet native-USDC gas is 18 decimals; the ERC-20 USDC below
 ///         is 6 — never mix raw values (docs.arc.io EVM differences).
+/// @dev    Genesis deposit is done post-deploy via script/seed_pool.sh — forge's
+///         local sim lacks Arc's `isBlocklisted` precompile, so an in-script
+///         transferFrom reverts there (the chain itself is fine). seed_pool.sh
+///         also asserts pricePerShare == exactly 1.0 on the first mint.
 contract Deploy is Script {
     /// @notice Arc testnet predeployed USDC (ERC-20, 6 decimals).
     address constant ARC_USDC = 0x3600000000000000000000000000000000000000;
@@ -84,10 +88,9 @@ contract Deploy is Script {
         router.setCredit(creditLine); // router draws → credit line
         router.setArbiter(arbiter); // dispute rulings
 
-        // ---- 6) genesis LP deposit: 1 USDC from the deployer, so the pool
-        // has real backing from block one (supply never 0, pps at 1.0). ----
-        usdc.approve(address(pool), GENESIS_DEPOSIT_USDC);
-        pool.deposit(GENESIS_DEPOSIT_USDC, deployer);
+        // ---- 6) first LP deposit — done post-deploy via script/seed_pool.sh ----
+        // usdc.approve(address(pool), GENESIS_DEPOSIT_USDC);
+        // pool.deposit(GENESIS_DEPOSIT_USDC, deployer);
 
         vm.stopBroadcast();
 

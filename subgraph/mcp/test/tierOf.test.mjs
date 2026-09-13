@@ -1,5 +1,5 @@
 // Parity harness: MCP tierOf() vs the deployed AgentRegistry.
-// Golden values read live from Arc testnet (registry 0x3Df83475b24fAF980E13105550790556B23480a5):
+// Golden values read live from Arc testnet (registry 0x9f5405afFda2Ba5A47851a8a9A30b7F9DFAE4A50):
 //   cast call $R 'repScore(address)(uint256)' 0x571b9a8d32c5a5f39f8e0dad1dc77de91a1bd7a2 → 500000000000000000  (tier → 1)
 //   cast call $R 'repScore(address)(uint256)' 0x8a13a54672f23e6ad751b1706dceda63313ba4f2 → 120000000000000     (tier → 0)
 // Run from subgraph/mcp:  node test/tierOf.test.mjs

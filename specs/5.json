@@ -15,7 +15,7 @@
   "verification": {
     "type": "upkeep",
     "chainId": 5042002,
-    "contract": "0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0",
+    "contract": "0x3773C170F2C59ef7eB349fE27E88202f236081f0",
     "method": "timeoutSettle(uint256)",
     "params": {
       "note": "Target the jobId in timeoutableNow from job_liveness at execution time"

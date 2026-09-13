@@ -69,7 +69,7 @@ fi
 RPC="${ARC_TESTNET_RPC_URL:-${RPC_URL:-https://rpc.testnet.arc.io}}"
 EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
 USDC="0x3600000000000000000000000000000000000000"
-ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}"
+ROUTER="${JOB_ROUTER:-0x3773C170F2C59ef7eB349fE27E88202f236081f0}"
 POOL="${CAPITAL_POOL:?set CAPITAL_POOL in .env.demo — tasks must never settle into an unseeded pool}"
 export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"
 

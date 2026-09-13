@@ -93,13 +93,30 @@ command -v cast >/dev/null 2>&1 || { echo "FATAL: cast not found — install fou
 # mint into <JOBREPO>/.env.demo without touching the root .env for keys.
 JOBREPO="${DEMO_JOB_REPO:-${PWD}/my_job}"
 DEMO_ENV="$JOBREPO/.env.demo"
+# The task repo (default ./my_job, override DEMO_JOB_REPO) is the ONLY home for
+# the demo keys + task. No root-.env hunting, no silent mkdir — if it isn't
+# here, ASK: copy the template, or re-run pointing at where you placed it.
+ensure_jobrepo() {
+  [ -d "$JOBREPO" ] && return
+  echo "  no task repo at $JOBREPO (that's where the demo keys + task live)."
+  if (( ! AUTO )) && [ -t 0 ]; then
+    read -r -p "  copy template/my-job to $JOBREPO now? [Y/n]  (N = I placed it elsewhere → set DEMO_JOB_REPO=) " _ans
+  else
+    _ans="Y"   # --auto / piped: materialize the template, keep moving
+  fi
+  case "${_ans:-Y}" in
+    ""|Y|y|[Yy]*) cp -r template/my-job "$JOBREPO" ;;
+    *) echo "  ok — re-run with DEMO_JOB_REPO=<your-repo-path>." >&2; exit 1 ;;
+  esac
+}
+ensure_jobrepo
 # infra constants needed even by the keys-only path (to write <JOBREPO>/.env.demo)
 RPC="${ARC_TESTNET_RPC_URL:-https://rpc.testnet.arc.io}"
 # Deployed pool is a public testnet constant (same value as .env.example /
 # ONBOARDING.md's MCP config) — a fresh machine needs NO root .env for key
 # minting; the demo pair lands only in <JOBREPO>/.env.demo. Root .env stays
 # an optional dev override (custom deployments, subgraph creds).
-POOL="${CAPITAL_POOL:-0x62bb4fEa3e21b45F6A71CCd8bFE763F1ED92E254}"
+POOL="${CAPITAL_POOL:-0xB399B1bC57187B307098549e5340a4bFa2bAF3B1}"
 
 
 new_key() {   # cast wallet new --json -> bare private key. Newer foundry (v1.8+)
@@ -128,14 +145,9 @@ print(key)'
 # only home for the demo pair. The root .env is NEVER used to seed these keys —
 # and is not even required anymore: infra constants (pool/router/registry/RPC)
 # default to the deployed testnet values, so this path works on a bare clone.
-# keys-only creates the target dir if it is missing (with a .gitignore so
-# .env.demo stays gitignored), always mints fresh, writes ORIGINATOR_PRIVATE_KEY
-# + AGENT_PRIVATE_KEY into <JOBREPO>/.env.demo, prints both addresses, and exits.
+# keys-only always mints fresh, writes ORIGINATOR_PRIVATE_KEY + AGENT_PRIVATE_KEY
+# into <JOBREPO>/.env.demo, prints both addresses, and exits.
 if (( KEYS_ONLY )); then
-  mkdir -p "$JOBREPO"
-  cat > "$JOBREPO/.gitignore" <<'GITIGNORE'
-.env.demo
-GITIGNORE
   ORIG_PK="$(new_key)"
   AGENT_PK="$(new_key)"
   DEMO_WALLET="$(cast wallet address "$ORIG_PK")"
@@ -168,8 +180,8 @@ fi
 # subgraph creds) — never a source of demo keys (those are minted fresh below
 # into <JOBREPO>/.env.demo).
 USDC="0x3600000000000000000000000000000000000000"
-ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}"
-REGISTRY="${AGENT_REGISTRY:-0x3Df83475b24fAF980E13105550790556B23480a5}"
+ROUTER="${JOB_ROUTER:-0x3773C170F2C59ef7eB349fE27E88202f236081f0}"
+REGISTRY="${AGENT_REGISTRY:-0x9f5405afFda2Ba5A47851a8a9A30b7F9DFAE4A50}"
 ORACLE="$ORACLE_ADDRESS"
 SUBGRAPH="${SUBGRAPH_URL:-https://api.studio.thegraph.com/query/1758789/job-router/0.0.6}"
 CHAIN="${CHAIN_ID:-5042002}"
@@ -286,16 +298,9 @@ wait_funded() {   # poll until $1 holds >= $2 USDC; $3 = label; times out ~20 mi
 # Keys live in the TASK REPO's .env.demo (right next to task.md) — there is no
 # protocol-repo key file anymore. The ROOT .env is never used to seed these keys;
 # it is sourced above only for infra constants (ORACLE_ADDRESS, RPC, pool
-# addresses, etc.). So the task repo must exist first; a failed/interrupted
-# walkthrough must not orphan keys, and re-runs reuse the task repo's .env.demo
-# as-is; only DEMO_FRESH_WALLETS=1 mints anew (archive first).
-if [ ! -d "$JOBREPO" ]; then
-  echo "FATAL: no task repo at $JOBREPO — the demo keys live there now" >&2
-  echo "  (no repo-root .env.demo). Materialize it first:" >&2
-  echo "    cp -r template/my-job my_job && cd my_job && forge install forge-std" >&2
-  echo "  then rerun ./script/onboard.sh (or set DEMO_JOB_REPO=<path>)." >&2
-  exit 1
-fi
+# addresses, etc.). The task repo is guaranteed above by ensure_jobrepo; a
+# failed/interrupted walkthrough must not orphan keys, and re-runs reuse the
+# task repo's .env.demo as-is; only DEMO_FRESH_WALLETS=1 mints anew (archive first).
 DEMO_ENV="$JOBREPO/.env.demo"
 if [ -f "$DEMO_ENV" ] && [ "${DEMO_FRESH_WALLETS:-0}" != "1" ]; then
   set -a; source "$DEMO_ENV"; set +a
@@ -516,7 +521,7 @@ cat <<EOF
     "JOB_ROUTER": "$ROUTER",
     "AGENT_REGISTRY": "$REGISTRY",
     "CAPITAL_POOL": "$POOL",
-    "CREDIT_LINE": "${CREDIT_LINE:-0x03282B94374B8535C758B7B71A4a69EfBC6b5048}",
+    "CREDIT_LINE": "${CREDIT_LINE:-0x060c68A7E696aa88D5d7aB37722681BD1894B783}",
     "ORACLE_ADDRESS": "$ORACLE",
     "CHAIN_ID": "$CHAIN",
     "RPC_URL": "$RPC",

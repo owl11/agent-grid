@@ -32,7 +32,7 @@ EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
 export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"   # full receipts land here, never stdout
 USDC="0x3600000000000000000000000000000000000000"   # Arc native USDC ERC-20 view (6 dp)
 # Pinned to the canonical deployment — override via env after a redeploy.
-ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}" # canonical JobRouter (redeploy #4)
+ROUTER="${JOB_ROUTER:-0x3773C170F2C59ef7eB349fE27E88202f236081f0}" # canonical JobRouter
 POOL="${CAPITAL_POOL:?set CAPITAL_POOL (canonical pool) — jobs must never settle into an unseeded pool}"
 # Originator posts escrow — deliberately NOT the deployer (protocol ops).
 # Falls back to deployer if ORIGINATOR_PRIVATE_KEY is unset.

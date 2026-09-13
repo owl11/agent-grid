@@ -83,9 +83,9 @@ key from THIS repo's `.env.demo` itself (no key in your editor config — set th
   "args": ["<ABSOLUTE-PROTOCOL-REPO-PATH>/subgraph/mcp/src/index.js"],
   "env": {
     "SUBGRAPH_URL": "https://api.studio.thegraph.com/query/1758789/job-router/0.0.6",
-    "JOB_ROUTER": "0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0",
-    "AGENT_REGISTRY": "0x3Df83475b24fAF980E13105550790556B23480a5",
-    "CAPITAL_POOL": "0x62bb4fEa3e21b45F6A71CCd8bFE763F1ED92E254",
+    "JOB_ROUTER": "0x3773C170F2C59ef7eB349fE27E88202f236081f0",
+    "AGENT_REGISTRY": "0x9f5405afFda2Ba5A47851a8a9A30b7F9DFAE4A50",
+    "CAPITAL_POOL": "0xB399B1bC57187B307098549e5340a4bFa2bAF3B1",
     "ORACLE_ADDRESS": "0x24F74B5B4a613d38E4926c9E54C1162ec4a840A0",
     "RPC_URL": "https://rpc.testnet.arc.io",
     "ORIGINATOR_ENV_FILE": "<PATH-TO-MY_JOB>/.env.demo",

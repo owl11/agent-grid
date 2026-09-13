@@ -60,8 +60,8 @@ cd "$(dirname "$0")/.."   # repo root: resolves ../specs + script/ regardless of
 RPC="${ARC_TESTNET_RPC_URL:-https://rpc.testnet.arc.io}"
 USDC="0x3600000000000000000000000000000000000000"
 # Pinned to the canonical deployment — override via env after a redeploy.
-ROUTER="${JOB_ROUTER:-0xA4B7f0a1E650318CAe82a64902D1104466DE6ea0}"
-REGISTRY="${AGENT_REGISTRY:-0x3Df83475b24fAF980E13105550790556B23480a5}"
+ROUTER="${JOB_ROUTER:-0x3773C170F2C59ef7eB349fE27E88202f236081f0}"
+REGISTRY="${AGENT_REGISTRY:-0x9f5405afFda2Ba5A47851a8a9A30b7F9DFAE4A50}"
 POOL="${CAPITAL_POOL:?set CAPITAL_POOL (canonical pool) — jobs must never settle into an unseeded pool}"
 EXPLORER="${EXPLORER:-https://explorer.testnet.arc.io}"
 export TECH_LOG="${TECH_LOG:-/tmp/agentgrid-tech.log}"   # full receipts land here, never stdout
