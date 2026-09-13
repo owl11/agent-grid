@@ -146,6 +146,7 @@ contract JobRouter is IJobRouter {
     function accept(uint256 jobId) external {
         Job storage j = _fetch(jobId);
         if (j.state != State.POSTED) revert InvalidState(jobId, j.state);
+        if (block.timestamp > j.execDeadline) revert DeadlinePassed(jobId);
 
         // direct hire: only the designated wallet (windows skipped entirely)
         if (j.designatedAssignee != address(0)) {
@@ -263,6 +264,7 @@ contract JobRouter is IJobRouter {
     function canAccept(uint256 jobId, address agent) external view returns (bool) {
         Job storage j = _fetch(jobId);
         if (j.state != State.POSTED) return false;
+        if (block.timestamp > j.execDeadline) return false; // mirrors accept() gate
         if (j.designatedAssignee != address(0)) {
             // direct hires pay the SAME gates as accept() — including the
             // bond-capacity check (view must not say yes where accept reverts)

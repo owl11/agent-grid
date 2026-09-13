@@ -45,6 +45,10 @@ contract CapitalPool is ERC4626, ICapitalPool {
 
     /// @notice Locked one-arg exit — ≡ 4626 redeem(shares, msg.sender, msg.sender).
     /// Shares-IN (not assets); never pause-blocked (entry-only pause).
+    /// NOTE: shadows ERC4626's 3-arg withdraw(assets, receiver, owner) — because we
+    ///       provide a 1-arg 'shares in' API, the inherited 3-arg withdraw/.../... are
+    ///       inaccessible via their selectors (selector collision on 1-arg deposit/withdraw).
+    ///       Composability with tools expecting the standard 3-arg surface is a v2 concern.
     function withdraw(uint256 shares) external override returns (uint256 amountOut) {
         if (shares > balanceOf(msg.sender)) revert InsufficientShares();
         amountOut = redeem(shares, msg.sender, msg.sender); // capped maxRedeem → burn → pay
@@ -57,6 +61,10 @@ contract CapitalPool is ERC4626, ICapitalPool {
         if (!lendEnabled) revert PoolLendingPaused(); // I6 pool-side gate
         if (msg.sender != creditLine) revert NotCreditLine();
         if (amount > usdc.balanceOf(address(this)) - totalPrincipal) revert InsufficientLiquidity(); // P5
+        // Defensive guard: if somehow totalPrincipal exceeds the actual USDC balance
+        // (e.g. direct transfer in without going through lendTo), refuse to lend rather
+        // than underflow on the subtraction. Real bug in principle; gated off in v1 (P8).
+        if (usdc.balanceOf(address(this)) < totalPrincipal) revert InsufficientLiquidity();
         totalPrincipal += amount;
         usdc.safeTransfer(to, amount); // balance −amount; pps unchanged (NAV keeps principal)
     }

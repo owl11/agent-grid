@@ -119,6 +119,13 @@ contract AgentRegistry is IAgentRegistry {
         // every call (repeatable full withdrawal).
         a.bond = 0;
         a.unlockAt = 0;
+        // Clear agentIdOwner for adapter-based identities so the ERC-8004 NFT can
+        // be rebonded by whoever holds it. Bare-mode agentIds (wallet == identity)
+        // are unaffected — they're wallet-derived and the wallet has already exited.
+        // Reputation (reps) persists across exit — re-bonding revives the same agentId.
+        if (address(a.adapter) != address(0)) {
+            agentIdOwner[a.agentId] = address(0);
+        }
         SETTLEMENT_TOKEN.safeTransfer(msg.sender, amount);
         // delete agents[msg.sender]; we cant delete agents from our registry since it can be taken advantage off to cleanse bad reputation
         emit Exited(msg.sender, amount);

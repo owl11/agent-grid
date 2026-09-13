@@ -79,6 +79,13 @@ contract CreditLine is ICreditLine, Ownable {
         uint128 covered = uint128(Math.min(coverage, debts[agentId].principal));
         debts[agentId].principal -= covered;
         pool.receiveRepayment(covered); // pool re-acquired the collateral
+        // If coverage didn't cover the full debt, the shortfall is bad debt: mark the
+        // pool's NAV down immediately (same-block, visible per P6/I8). This is the
+        // trigger the audit expected — without it, bad debt sits on the books and LPs
+        // can exit at an inflated pricePerShare (bank-run vector, v1 gated but real).
+        if (debts[agentId].principal > registry.bondOf(debts[agentId].wallet)) {
+            pool.reportLoss(agentId, 0);
+        }
         emit Slashed(agentId, covered, debts[agentId].principal);
     }
 
